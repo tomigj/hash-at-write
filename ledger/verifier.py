@@ -158,18 +158,53 @@ def verify(chain, records, duplicates, malformed, max_silence):
         alerts.append(Alert("UNWITNESSED", seq,
                             "record is present in the log but no digest for it ever reached the ledger"))
 
+    # --- out-of-order arrival ----------------------------------------------
+    # The ledger accepts a digest for a sequence it never chained, because
+    # refusing it would make spool recovery impossible. It marks it, and the
+    # mark is surfaced here: a legitimate late arrival after an outage and a
+    # backfill of a previously unwitnessed record look identical at the chain,
+    # and only the receipt time distinguishes them.
+    for entry in chain:
+        if entry.get("out_of_order"):
+            alerts.append(Alert("LATE DIGEST", entry.get("seq"),
+                                f"digest arrived after the chain had reached seq "
+                                f"{entry.get('chain_head_seq_at_receipt')}; "
+                                f"received {entry.get('received')}"))
+
     # --- agent silence -----------------------------------------------------
-    # Uses the ledger's own receipt timestamps. The log's timestamps are
-    # written by the primary and are therefore attacker-controlled.
-    if max_silence and len(chain) >= 2:
-        for prev, curr in zip(chain, chain[1:]):
+    # Uses the ledger's own receipt timestamps throughout. The log's timestamps
+    # are written by the primary and are therefore attacker-controlled.
+    if max_silence:
+        if not chain:
+            alerts.append(Alert("SILENCE", "-",
+                                "the chain is empty: no digest has ever been received"))
+        else:
+            # Interior gaps: the agent stopped and was restarted.
+            for prev, curr in zip(chain, chain[1:]):
+                try:
+                    gap = (parse_ts(curr["received"]) - parse_ts(prev["received"])).total_seconds()
+                except (KeyError, ValueError):
+                    continue
+                if gap > max_silence:
+                    alerts.append(Alert("SILENCE", f"{prev['seq']}->{curr['seq']}",
+                                        f"{gap:.0f}s with no digests received "
+                                        f"(threshold {max_silence}s)"))
+
+            # The open interval: the agent stopped and STAYED stopped, so the
+            # chain simply ends. Without this check that case reports CLEAN --
+            # which is backwards, because an attacker who kills the agent and
+            # walks away is both cheaper and likelier than one who politely
+            # restarts it afterwards.
             try:
-                gap = (parse_ts(curr["received"]) - parse_ts(prev["received"])).total_seconds()
-            except (KeyError, ValueError):
-                continue
-            if gap > max_silence:
-                alerts.append(Alert("SILENCE", f"{prev['seq']}->{curr['seq']}",
-                                    f"{gap:.0f}s with no digests received (threshold {max_silence}s)"))
+                open_gap = (datetime.now(timezone.utc)
+                            - parse_ts(chain[-1]["received"])).total_seconds()
+                if open_gap > max_silence:
+                    alerts.append(Alert("SILENCE", f"{chain[-1]['seq']}->now",
+                                        f"{open_gap:.0f}s since the last digest was "
+                                        f"received; the agent may be stopped "
+                                        f"(threshold {max_silence}s)"))
+            except (KeyError, ValueError, IndexError):
+                pass
 
     return alerts
 
