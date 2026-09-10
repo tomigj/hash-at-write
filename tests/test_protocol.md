@@ -12,15 +12,15 @@ Times are UTC. Full captures are in `evidence/`.
 
 | # | Scenario | Result | Evidence |
 |---|---|---|---|
-| T1 | Normal operation, volume | pending | — |
+| T1 | Normal operation, volume | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
 | T2 | Modification | **PASS** | `step6-tamper-deletion.txt` |
 | T3 | Deletion, last record | **PASS** | `step6-tamper-deletion.txt` |
 | T3b | Deletion, middle record | **PASS** | `step6-tamper-deletion.txt` |
-| T4 | Legitimate activity, false-positive check | pending | — |
+| T4 | Legitimate activity, false-positive check | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
 | T5 | Write refusal | **PASS** | `step1-claim4-reverse-test.txt`, `step7-chain-integrity.txt` |
 | T6 | Overhead | partial | `step5-clean-run.txt` |
-| T7 | Unwitnessed insertion | pending | — |
-| T8 | Backdating | pending | — |
+| T7 | Unwitnessed insertion | **PASS** | `tests/run_attack_suite.py` |
+| T8 | Backdating | **PASS** | `tests/run_attack_suite.py` |
 | T9 | Stopped agent | **PASS** (incidental) | `step6-tamper-deletion.txt` |
 | T10 | Lost acknowledgement | **PASS** (unplanned) | `step3-push-path.txt` |
 | T11 | Implausible sequence | pending | — |

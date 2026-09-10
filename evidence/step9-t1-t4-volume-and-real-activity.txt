@@ -1,0 +1,91 @@
+T1 and T4 — volume, and real activity as the false-positive check
+
+CAPTURED: 2026-09-10, times UTC
+
+================================================================================
+HOW THE REAL AUTHENTICATIONS WERE PRODUCED
+================================================================================
+
+The spec asks for real SSH logins rather than synthetic events. These were not
+staged: the verifier's own pull path produces them. Every verification run
+authenticates to the `verify` account on the primary over SSH, so driving
+verification drives genuine authentications, and the emitter's --tail mode on
+/var/log/auth.log captures them as they occur.
+
+The false-positive check therefore exercises the production mechanism rather than
+a simulation of it.
+
+    tail started 05:52:32 UTC, following /var/log/auth.log
+    six verifier pulls driven from the ledger, 05:55:00 to 05:55:27
+
+================================================================================
+WHAT WAS CAPTURED — 98 records
+================================================================================
+
+    synthetic                    50
+    sshd session open/close      15
+    heartbeat                    13
+    ssh accepted-publickey        9
+    systemd-user session          5
+    cron session                  2
+
+--- The captured set is NOT "SSH logins", and must not be described as such ---
+
+emitter.py's AUTH_MARKERS list includes the PAM strings "session opened for user"
+and "session closed for user". Those are not sshd-specific: they match sudo, cron
+and systemd-user sessions too. The comment in the source claimed the filter was
+deliberately narrow. It was not, and the comment has been corrected.
+
+The breadth is worth keeping. An audit trail recording only SSH would miss
+privilege escalation through sudo and anything scheduled through cron, which are
+precisely the events an investigation cares about. But the write-up must describe
+this as authentication and session events, of which SSH is a subset.
+
+--- One SSH connection produces five records, not one ------------------------
+
+    sshd[40304]: Accepted publickey for verify from 10.0.0.212 port ...
+    sshd[40304]: pam_unix(sshd:session): session opened for user verify
+    (systemd):   pam_unix(systemd-user:session): session opened for user verify
+    sshd[40304]: pam_unix(sshd:session): session closed for user verify
+    (sd-pam):    pam_unix(systemd-user:session): session closed for user verify
+
+Relevant to any future event-rate estimate: a five-minute verification timer
+produces roughly one forwarded event per minute from pulls alone.
+
+--- Tail-captured versus manually emitted, kept distinct ---------------------
+
+    tail-captured authentications (verify account):  8
+    manually emitted test records (tomigj):          1
+
+The single tomigj record is the one emitted with --message for the T2 tamper
+test. It is not a tail capture. An earlier draft of this file used it as the
+example of a captured authentication, which would have misdescribed what T4
+demonstrates; corrected before commit.
+
+================================================================================
+T4 RESULT — THE FALSE-POSITIVE CHECK
+================================================================================
+
+    [2026-09-10T05:55:48.237Z] chain=98 log=98 heartbeats=13 -> CLEAN
+    exit 0
+
+Genuine authentication and session events, captured live from a real system log
+and pushed through the full path, produce no alerts of any kind. Exact parity
+between the ledger's digests and the primary's records.
+
+Run at --max-silence 0. That is not to hide anything: this chain carries a
+permanent 37.9-minute silence gap from the deliberate stop during T2, T3 and
+T3b, recorded in NOTES.md and unremovable because the chain is append-only.
+Including it here would mean T4's result was dominated by a historical artefact
+of a different test. The gap is reported separately and labelled.
+
+================================================================================
+T1 RESULT — VOLUME
+================================================================================
+
+98 records: 50 synthetic events, 29 real authentication and session events, 13
+heartbeats, plus the T2/T3 test records. The spec asks for 50+ including real SSH
+logins; both halves are present and the real half was produced by the system's
+own verification traffic rather than by simulation.
+
+    spool: empty throughout -- no digest failed to reach the ledger
