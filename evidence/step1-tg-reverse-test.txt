@@ -1,0 +1,161 @@
+Step 1 — reverse reachability test, primary side
+
+HOST:     tg (primary), 10.0.0.173, Ubuntu 24.04.4 LTS, Python 3.12.3
+OPERATOR: at the physical keyboard
+CAPTURED: 2026-09-10. Transcript times are UTC; ufw.log timestamps are local (-04:00).
+TEST:     the primary attempting to reach the ledger
+
+Link-layer and global IPv6 addresses are pseudonymised. Mapping at the end. The
+substitution was applied mechanically and the result checked for surviving
+identifiers before commit; annotations were written separately from the capture
+so interpretation never depends on redaction.
+
+================================================================================
+1. PROBE COMMANDS AS RUN
+================================================================================
+
+date -u
+
+for p in 22 9900; do
+  s=$(date +%s%3N)
+  timeout 15 bash -c "cat < /dev/null > /dev/tcp/10.0.0.212/$p" 2>&1
+  rc=$?
+  e=$(date +%s%3N)
+  echo "port $p -> exit $rc, elapsed $((e-s))ms"
+done
+
+date -u
+
+sudo tail -40 /var/log/ufw.log
+
+================================================================================
+2. PROBE OUTPUT, VERBATIM
+================================================================================
+
+Thu Sep 10 03:58:58 AM UTC 2026
+port 22 -> exit 124, elapsed 15012ms
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/10.0.0.212/9900: Connection refused
+port 9900 -> exit 1, elapsed 71ms
+Thu Sep 10 03:59:13 AM UTC 2026
+
+================================================================================
+3. NEIGHBOUR TABLE ON tg — Thu Sep 10 04:01:07 AM UTC 2026
+================================================================================
+
+10.0.0.212 dev wlp59s0 lladdr <daddy-nic> STALE
+<daddy-v6> dev wlp59s0 lladdr <daddy-nic> STALE
+<daddy-linklocal> dev wlp59s0 lladdr <daddy-nic> STALE
+
+================================================================================
+4. /var/log/ufw.log — tail -40, pseudonymised, otherwise verbatim
+================================================================================
+
+2026-09-09T23:35:18.811251-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=54.167.136.58 DST=10.0.0.173 LEN=52 TOS=0x00 PREC=0x00 TTL=241 ID=11423 DF PROTO=TCP SPT=8886 DPT=41086 WINDOW=8 RES=0x00 ACK URGP=0
+2026-09-09T23:35:26.293132-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55275 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:26.538403-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55276 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:26.799504-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55277 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:27.259308-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55278 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:28.269029-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55279 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:30.277648-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55280 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:34.070612-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55281 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:35:41.953595-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<router>:08:00 SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TOS=0x00 PREC=0x00 TTL=57 ID=55282 DF PROTO=TCP SPT=443 DPT=44544 WINDOW=58 RES=0x00 ACK PSH URGP=0
+2026-09-09T23:45:18.920708-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8427 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:20.013011-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8428 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:21.036352-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8429 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:22.063116-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8430 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:23.039640-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8431 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:24.108090-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8432 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:26.111845-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=8433 DF PROTO=TCP SPT=55020 DPT=9900 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:26.975328-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=49825 DF PROTO=TCP SPT=57938 DPT=80 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:27.999792-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=49826 DF PROTO=TCP SPT=57938 DPT=80 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:45:29.023726-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:08:00 SRC=10.0.0.212 DST=10.0.0.173 LEN=60 TOS=0x00 PREC=0x00 TTL=64 ID=49827 DF PROTO=TCP SPT=57938 DPT=80 WINDOW=64240 RES=0x00 SYN URGP=0
+2026-09-09T23:51:51.192098-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=597041 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:51:52.207350-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=505594 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:51:53.231239-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=498293 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:51:54.255371-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=244085 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:51:55.279412-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=428058 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:51:56.303968-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=449883 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:51:58.349224-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=1009987 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:52:02.336528-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=952935 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+2026-09-09T23:52:10.464373-04:00 tg kernel: [UFW BLOCK] IN=wlp59s0 OUT= MAC=<tg-nic>:<daddy-nic>:86:dd SRC=<daddy-v6> DST=<tg-v6> LEN=80 TC=0 HOPLIMIT=64 FLOWLBL=746638 PROTO=TCP SPT=33388 DPT=22 WINDOW=64800 RES=0x00 SYN URGP=0
+
+================================================================================
+5. ANNOTATION — interpretation only, contains no capture data
+================================================================================
+
+RESULT: PASS.
+
+  port 22    exit 124 after 15012ms. Silently dropped by the ledger's default
+             deny. No inbound SSH path from the primary to the evidence host.
+  port 9900  exit 1 after 71ms, "Connection refused". The allow rule matched, the
+             SYN reached the ledger's kernel, and the ledger returned an RST
+             because ledgerd is not yet running. Write path open and empty, which
+             is the correct state before it runs.
+
+The pair is self-validating. The refusal proves the ledger was up, reachable, and
+able to return traffic to the primary at 03:59:13 — fifteen seconds after the
+port 22 attempt from the same shell. The silence on port 22 therefore cannot be
+attributed to unreachability. It is policy.
+
+Section 3 establishes that 10.0.0.212 and <daddy-v6> are the same physical host:
+both resolve to link-layer address <daddy-nic> in the primary's own neighbour
+table. This is what makes the IPv6 negative test conclusive — "permitted over
+IPv4, blocked over IPv6" otherwise rests on an unverified assumption that the two
+addresses belong to one machine. Neighbour entries are perishable and were
+already STALE at capture.
+
+The log holds three unrelated groups.
+
+  23:35:18-23:35:41 local (03:35 UTC), nine lines. NOT hostile traffic. These are
+  this host's own outbound connections having their return path severed when ufw
+  was enabled at 03:35:08-03:35:14. SRC 160.79.104.10 is Anthropic; DPT 44544 was
+  a local ephemeral port on an established HTTPS connection, confirmed present in
+  an `ss` capture taken before the firewall came up and absent afterwards. IP IDs
+  55275-55282 increment with TCP backoff — 0.25s, 0.26s, 0.46s, 1.0s, 2.0s, 3.8s,
+  7.9s — which is one server retransmitting into a dead return path. The source
+  half of the MAC field is <router>: traffic relayed from outside the LAN.
+
+  23:45:18-23:45:29 local (03:45 UTC), ten lines. The ledger probing this host on
+  9900 (seven SYNs) and 80 (three SYNs), blocked by the primary's default deny.
+  These are NEGATIVE CONTROLS for the primary's inbound policy. They are NOT a
+  test of the write path: nothing in the architecture connects ledger to primary
+  on 9900. The write path is primary to ledger and is evidenced in section 2.
+
+  23:51:51-23:52:10 local (03:51 UTC), nine lines. The ledger connecting to this
+  host's port 22 over IPv6, blocked. The primary's allow rule is scoped to an
+  IPv4 address, so no rule matches a v6 attempt and the default deny applies. The
+  source half of the MAC field is <daddy-nic> — the ledger directly on the LAN,
+  not relayed — and the ethertype is 86:dd, IPv6.
+
+LOGGING COMPLETENESS. LOGLEVEL=low on this host rate-limits blocked-packet
+logging, so this log is a SAMPLE, NOT A COMPLETE RECORD. Line counts are not
+attempt counts: "seven blocked SYNs to 9900 were logged" is supportable, "seven
+SYNs were blocked" is not. The absence of a logged line is not evidence a packet
+was permitted. The ledger side timed its probe window to 03:45:34 while this log
+ends at 03:45:29; that five-second difference is consistent with rate limiting
+rather than a gap in enforcement.
+
+================================================================================
+6. PSEUDONYM MAPPING
+================================================================================
+
+Shared with the other files in evidence/ — the same token denotes the same device
+everywhere it appears.
+
+    <tg-nic>            primary host wifi NIC
+    <daddy-nic>         ledger host wifi NIC
+    <router>            home router
+    <tg-v6>             primary's stable global IPv6 /128
+    <daddy-v6>          ledger's global IPv6 address
+    <daddy-linklocal>   ledger's fe80:: address
+
+In a ufw log line the MAC field is destination:source:ethertype. The ethertype is
+kept verbatim because it is evidentiary — 08:00 is IPv4, 86:dd is IPv6 — and it
+is not identifying. Keeping the two NIC halves distinct is what separates
+router-relayed traffic from traffic sent directly on the LAN, which is how group
+1 is told apart from groups 2 and 3.
+
+Real values are withheld because a link-layer address is a permanent, globally
+unique device identifier and a routable IPv6 address carries the home network's
+ISP-delegated prefix. Neither is evidentiary. Everything that is has been kept.
