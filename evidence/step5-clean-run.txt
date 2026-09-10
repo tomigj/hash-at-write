@@ -1,0 +1,119 @@
+Step 5 — clean-run comparison
+
+CAPTURED: 2026-09-10, times UTC
+BASELINE: log and chain started together, both empty, no recovery in the set
+
+================================================================================
+BASELINE ESTABLISHED
+================================================================================
+
+Both sides were archived and restarted so that the log and the chain begin
+together at sequence 1. This matters: the previous working set opened with the 21
+digests spooled during step 3's outage, so every verification of it carried 21
+UNCORROBORATED alerts. Those are correct and are captured as their own artefact,
+but an artefact whose headline is 21 alerts is a poor baseline for "no alerts,
+chain intact".
+
+Nothing was discarded. Three archives exist outside the repository:
+
+    witnessd-attempt1     20 records, superseded code, heartbeats disabled
+    witnessd-step2        23 records, --no-push local-only run
+    witnessd-steps2to4    91 records, push path, outage, recovery, steady state
+
+The archived set was verified before being set aside: 91 records, 0 digest
+mismatches, sequences 1-91 contiguous, 21 heartbeats and 70 events. The archived
+chain holds 91 entries. Exact parity -- every digest the ledger held has a
+record, and every record has a digest.
+
+The new chain file was made append-only BEFORE its first byte was written:
+
+    ledgerd listening on 10.0.0.212:9900
+    chain head seq=0 hash=0000000000000000...
+    -----a--------e------- /var/lib/ledger/chain.jsonl
+    0 /var/lib/ledger/chain.jsonl
+
+================================================================================
+THE RUN — tg, 05:05:15 UTC
+================================================================================
+
+    50 events in 0.923s (54.2 events/sec, 18.463 ms/event)
+    spool entries: 0 -- CLEAN
+    pushed=true on 50 of 50 timing rows
+
+The agent's terminal stayed silent throughout: no [GAP] lines, no retries.
+
+Independently verified on the primary before verification from the ledger:
+
+    records 51  mismatches 0  seq 1-51  contiguous True
+    heartbeats 1  events 50
+
+================================================================================
+VERIFICATION FROM THE LEDGER — 05:06:49 UTC
+================================================================================
+
+Run three times. Each pulled the log from the primary over the restricted SSH
+channel -- the real path, not a local file -- and recomputed everything locally.
+
+    [2026-09-10T05:06:49.360Z] chain=51 log=51 heartbeats=1 -> CLEAN    exit: 0
+    [2026-09-10T05:06:53.207Z] chain=51 log=51 heartbeats=1 -> CLEAN    exit: 0
+    [2026-09-10T05:06:56.608Z] chain=51 log=51 heartbeats=1 -> CLEAN    exit: 0
+
+Zero alerts of any kind. Exit code 0 on all three.
+
+--- Why three runs and not one -----------------------------------------------
+
+The system was live throughout, beating once a minute. The verifier pulls the log
+over SSH and reads the chain locally, and those two reads are not simultaneous.
+A heartbeat landing between them would produce a single spurious alert on the
+newest sequence -- DELETION if the chain read came second, UNWITNESSED if it came
+first -- from the race rather than from any fault.
+
+Three runs across eight seconds, all reporting the same boundary sequence and all
+clean, distinguishes a genuine result from a race artefact. This is inherent to
+verifying a live log rather than a defect, and it is the reason the run was
+repeated rather than reported from a single pass.
+
+================================================================================
+TIMING — 50 WARM-RADIO SAMPLES, PERCENTILES
+================================================================================
+
+                             min      p25      med      p75      max
+    hash_us                   68      134      135      137      215
+    digest_before_write_us  2700     3211     3289     5155     9726
+    state_us                2839     3687     3916     4070     9298
+    push_us                 4345     5304     5945     7543    89077
+    total_us               11306    12782    14283    18340    97143
+
+    hash                     0.7%
+    log write + fsync       23.3%
+    state-file persist      23.1%
+    push (acknowledged)     52.8%
+
+The single 89077us push is the first event paying wifi power-save wakeup, as in
+the earlier run. Everything after it sits in the 4-8ms band.
+
+--- Stable across two independent 50-sample runs -----------------------------
+
+    push median   5945us  against  5966us
+    hash median    135us  against   137.9us
+
+Agreement to 0.4% on the push and 2% on the hash. That is a considerably better
+footing for T6 than either run alone.
+
+    hash                  ~135us    0.7-1.0%   inherent to the design, negligible
+    log write + fsync     ~3.3ms       ~23%    any durable logger pays this
+    state-file persist    ~3.9ms       ~23%    this design's addition, addressable
+    push (acknowledged)   ~5.9ms       ~53%    this design's addition, synchronous
+
+Hashing is under 1% of per-event cost. The two fsyncs and the acknowledged push
+are the other 99%. The design's real expense is durability and acknowledgement,
+not cryptography.
+
+Still outstanding for T6: the matching --no-hash baseline arm.
+
+================================================================================
+STATUS
+================================================================================
+
+Step 5 complete. Clean-run comparison passes with zero alerts over three
+consecutive verifications through the production pull path.
