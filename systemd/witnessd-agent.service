@@ -1,0 +1,58 @@
+# witnessd hash-at-write agent — installs on the PRIMARY host.
+#
+# RuntimeDirectory=integrity is the correct answer to a problem deferred at
+# step 2. The socket belongs under /run, but /run is root-owned so the agent
+# cannot create its own directory there, and adding a manual mkdir would leave
+# a directory nothing cleans up. systemd creates /run/integrity at start with
+# the ownership and mode below, and removes it at stop.
+#
+# Restart=on-failure has a consequence worth understanding rather than
+# inheriting: it narrows the window in which a stopped agent can be used to
+# insert unwitnessed records. An attacker who kills the process gets it back
+# within RestartSec. To keep it down they must use `systemctl stop` or mask the
+# unit, both of which leave a journal record — which is a meaningfully harder
+# and noisier action than `kill`.
+#
+# NOTE: the repository path differs between the two hosts. On the primary it is
+# ~/witnessd; on the ledger it is ~/NIW. Adjust WorkingDirectory and ExecStart
+# to match the host this is installed on.
+
+[Unit]
+Description=witnessd hash-at-write logging agent
+Documentation=https://github.com/tomigj/witnessd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tomigj
+Group=integrity
+WorkingDirectory=/home/tomigj/witnessd
+
+RuntimeDirectory=integrity
+RuntimeDirectoryMode=0750
+
+ExecStart=/usr/bin/python3 /home/tomigj/witnessd/agent/agent.py \
+    --socket /run/integrity/agent.sock \
+    --log /var/log/integrity/events.log \
+    --state /var/lib/integrity/agent.state \
+    --spool /var/lib/integrity/pending.jsonl \
+    --timing-log /var/log/integrity/timing.log \
+    --ledger-host 10.0.0.212 \
+    --ledger-port 9900 \
+    --heartbeat-interval 60
+
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# The agent needs to write only its own directories.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/log/integrity /var/lib/integrity
+
+[Install]
+WantedBy=multi-user.target

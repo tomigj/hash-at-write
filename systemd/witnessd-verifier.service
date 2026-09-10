@@ -1,0 +1,39 @@
+# witnessd verification run — installs on the LEDGER host.
+#
+# Oneshot, driven by witnessd-verifier.timer.
+#
+# Exit codes are the monitoring interface:
+#   0  clean
+#   1  alerts raised — the system worked and found something
+#   2  verification could not be completed
+#
+# Both 1 and 2 mark this unit failed, which is intended: `systemctl --failed`
+# should surface either. But they mean opposite things about the system's
+# health, and an operator who cannot tell "tampering was detected" from "the
+# verifier is broken" has the same ambiguity this project exists to remove.
+# Check the code, not just the state.
+
+[Unit]
+Description=witnessd log verification run
+Documentation=https://github.com/tomigj/witnessd
+After=network-online.target witnessd-ledgerd.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tomigj
+WorkingDirectory=/home/tomigj/NIW
+
+ExecStart=/usr/bin/python3 /home/tomigj/NIW/ledger/verifier.py \
+    --chain /var/lib/ledger/chain.jsonl \
+    --primary 10.0.0.173 \
+    --ssh-user verify \
+    --ssh-key /home/tomigj/.ssh/id_ed25519_verify \
+    --verify-log /var/log/verifier/verify.log \
+    --max-silence 180 \
+    --max-skew 300
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/log/verifier

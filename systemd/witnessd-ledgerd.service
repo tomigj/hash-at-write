@@ -1,0 +1,43 @@
+# witnessd digest chain receiver — installs on the LEDGER host.
+#
+# The chain and audit files carry chattr +a and are created before this unit
+# first runs, so that they are append-only from before their first byte. This
+# unit must NOT create them: a file created here would exist briefly without the
+# attribute, and "append-only since before the first byte" is a claim the
+# evidence makes.
+#
+# ProtectSystem=full leaves /var writable, which is required: the chain lives
+# under /var/lib/ledger. ReadWritePaths narrows that back down.
+
+[Unit]
+Description=witnessd digest chain receiver
+Documentation=https://github.com/tomigj/witnessd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tomigj
+WorkingDirectory=/home/tomigj/NIW
+
+ExecStart=/usr/bin/python3 /home/tomigj/NIW/ledger/ledgerd.py \
+    --bind 10.0.0.212 \
+    --port 9900 \
+    --chain /var/lib/ledger/chain.jsonl \
+    --audit /var/lib/ledger/ledgerd-audit.jsonl \
+    --allow 10.0.0.173 \
+    --idle-timeout 300
+
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/ledger
+
+[Install]
+WantedBy=multi-user.target

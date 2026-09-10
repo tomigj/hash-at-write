@@ -1,0 +1,23 @@
+# Drives witnessd-verifier.service.
+#
+# OnUnitActiveSec=5min sets how long tampering can sit undetected: up to one
+# interval. Shortening it narrows that window at the cost of more SSH pulls of
+# the whole log, which is O(log size) per run — on a production-sized log that
+# cost is the reason not to simply set it to a minute.
+#
+# Persistent=true means a run missed while the host was off happens at next
+# boot. That matters: a gap in verification is exactly when tampering would be
+# attempted, and the run should not simply be skipped.
+
+[Unit]
+Description=run witnessd verification periodically
+Documentation=https://github.com/tomigj/witnessd
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

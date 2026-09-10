@@ -423,8 +423,22 @@ def main():
                    help="run continuously every N seconds instead of once")
     args = p.parse_args()
 
+    # Exit codes are a monitoring interface, and "the verifier found tampering"
+    # must be distinguishable from "the verifier broke". Both are non-zero and
+    # both mark a systemd unit failed, but an operator seeing the code can tell
+    # which happened:
+    #   0  clean
+    #   1  alerts raised -- the system worked and found something
+    #   2  the verification could not be completed
     if not args.interval:
-        sys.exit(run_once(args))
+        try:
+            sys.exit(run_once(args))
+        except SystemExit:
+            raise
+        except Exception as exc:
+            print(f"[error] verification could not be completed: {exc}",
+                  file=sys.stderr)
+            sys.exit(2)
     while True:
         try:
             run_once(args)

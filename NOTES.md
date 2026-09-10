@@ -791,3 +791,72 @@ The cost of that change is a widened window between a record being written and
 its digest reaching the ledger, which is exactly the interval this project exists
 to shrink. It would need stating precisely rather than being treated as free.
 Not changing it now; recording it as the question T6's results will raise.
+
+---
+
+## Systemd units, and a security property that fell out of writing them
+
+Three units and a timer: the agent on the primary, ledgerd and a periodic
+verifier on the ledger.
+
+### RuntimeDirectory answers the question deferred at step 2
+
+The agent's socket belongs under /run, but /run is root-owned, so the agent
+cannot create its own directory there. Step 2 sidestepped this by putting the
+socket in /var/lib/integrity, with a note that the real answer was
+`RuntimeDirectory=`. It is: systemd creates /run/integrity at start with the
+declared ownership and mode, and removes it at stop. No manual mkdir, and nothing
+left behind that has to be cleaned up by hand.
+
+### Restart=on-failure narrows the fabrication window
+
+Not inherited from a template — it has a consequence specific to this threat
+model.
+
+The residual attack recorded earlier is: stop the agent, append a record at the
+next sequence with a truthful timestamp, witness it normally, restart. The window
+an attacker must fit inside is bounded by the verifier's silence threshold.
+
+Under systemd, killing the process gets it back within RestartSec. To hold it
+down the attacker must use `systemctl stop` or mask the unit — both of which
+leave a journal record. That does not close the hole, and nothing can while a
+root attacker can write records the agent would have written anyway. But it
+raises the cheapest version of the attack from `kill` to an action that is both
+harder and noisier, and the difference is worth stating.
+
+### The verifier's exit code is a monitoring interface, and it was ambiguous
+
+The verifier returned 0 for clean and 1 for everything else, so a systemd unit
+went failed identically whether tampering had been detected or the verifier
+itself had broken. Those mean opposite things about the system's health, and an
+operator who cannot tell them apart has exactly the ambiguity this project exists
+to remove — reproduced in the monitoring layer.
+
+Separated:
+
+    0  clean
+    1  alerts raised — the system worked and found something
+    2  verification could not be completed
+
+An unreachable primary stays at 1 rather than 2. It is a genuine finding, not a
+malfunction: the ledger could not see the log, and that is worth alerting on.
+Verified reachable: a corrupt or missing chain file now exits 2, a run with
+alerts exits 1, a clean run exits 0.
+
+### Timer interval is a stated trade, not a default
+
+`OnUnitActiveSec=5min` sets how long tampering can sit undetected: up to one
+interval. Shortening it narrows that window at the cost of pulling the whole log
+over SSH more often, which is O(log size) per run. On a production-sized log that
+cost is the reason not to simply set it to a minute, and the write-up should say
+so rather than presenting five minutes as a neutral default.
+
+`Persistent=true` means a run missed while the host was off happens at next boot.
+A gap in verification is precisely when tampering would be attempted, so a missed
+run should be made up rather than skipped.
+
+### Repository paths differ between the hosts
+
+The primary has the repo at ~/witnessd, the ledger at ~/NIW. The unit files carry
+absolute paths and therefore differ per host. Noted in each unit rather than left
+for someone to discover from a failed start.
