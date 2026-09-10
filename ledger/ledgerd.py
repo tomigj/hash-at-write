@@ -53,6 +53,10 @@ class Chain:
         os.makedirs(os.path.dirname(audit_path), exist_ok=True)
         self.head = GENESIS
         self.last_seq = 0
+        # seq -> digest, for telling a retransmission apart from a rewrite.
+        # Without this the chain can only ask "is this seq old?", which cannot
+        # distinguish a lost acknowledgement from an attack.
+        self.digests = {}
         self._load()
 
     def _load(self):
@@ -84,7 +88,9 @@ class Chain:
                     # Keep the stored value as the head so we chain onto the
                     # file as it exists. The discrepancy is now on record.
                     computed = entry.get("chain_hash", computed)
-                self.last_seq = max(self.last_seq, int(entry.get("seq", 0)))
+                seq = int(entry.get("seq", 0))
+                self.digests[seq] = entry.get("digest")
+                self.last_seq = max(self.last_seq, seq)
         self.head = computed
 
     def audit(self, kind, detail):
@@ -105,17 +111,41 @@ class Chain:
             if len(digest) != 64 or not all(c in "0123456789abcdef" for c in digest):
                 return False, "digest must be 64 lowercase hex characters"
 
-            # Rewrite and rewind vectors. A primary that has been rooted will
-            # try to resubmit an old seq with a digest matching doctored
-            # content; the chain must not accept it under any circumstances.
-            if seq <= self.last_seq:
+            # What actually constitutes a rewrite is a DIFFERENT digest for a
+            # sequence number already recorded. An identical digest for a
+            # recorded sequence is a retransmission -- it gains an attacker
+            # nothing, because the chain is unchanged -- and it happens for an
+            # ordinary reason: the acknowledgement was lost in transit and the
+            # agent resent. Refusing those manufactures the exact audit
+            # signature of an attack out of one dropped packet on wifi.
+            existing = self.digests.get(seq)
+            if existing is not None:
+                if existing == digest:
+                    self.audit("DUPLICATE_SUBMISSION", {
+                        "seq": seq, "peer": peer,
+                        "note": "identical digest already chained; "
+                                "acknowledging without appending"})
+                    return True, None
                 self.audit("REFUSED_REWRITE", {
-                    "seq": seq, "chain_head_seq": self.last_seq, "peer": peer})
-                return False, f"seq {seq} is at or below chain head {self.last_seq}"
+                    "seq": seq, "peer": peer,
+                    "chained_digest": existing, "submitted_digest": digest})
+                return False, f"seq {seq} already chained with a different digest"
 
+            # A sequence number below the head that was never chained is a
+            # legitimate late arrival -- the agent spooled it while this host
+            # was unreachable. Refusing it would make the spool unrecoverable
+            # by construction. It is accepted, and marked, because a digest
+            # arriving out of order is worth seeing: it is also the shape a
+            # backfill attempt would take.
+            out_of_order = seq < self.last_seq
             chain_hash = next_chain_hash(digest, self.head)
             entry = {"seq": seq, "digest": digest, "prev_chain": self.head,
                      "chain_hash": chain_hash, "received": utc_now()}
+            if out_of_order:
+                entry["out_of_order"] = True
+                entry["chain_head_seq_at_receipt"] = self.last_seq
+                self.audit("LATE_DIGEST", {
+                    "seq": seq, "peer": peer, "chain_head_seq": self.last_seq})
             with open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, sort_keys=True,
                                    separators=(",", ":")) + "\n")
@@ -123,7 +153,8 @@ class Chain:
                 os.fsync(f.fileno())
 
             self.head = chain_hash
-            self.last_seq = seq
+            self.digests[seq] = digest
+            self.last_seq = max(self.last_seq, seq)
             return True, None
 
 
@@ -151,7 +182,11 @@ class Handler(socketserver.StreamRequestHandler):
             ok, err = self.server.chain.submit(seq, digest, peer)
             # The acknowledgement carries no chain state. The submitter learns
             # only whether its digest was recorded.
-            self.reply({"ok": ok, "seq": seq} if ok else {"ok": False, "error": err})
+            # A refusal here is permanent by construction -- resubmitting the
+            # same thing will always be refused. Saying so lets the agent move
+            # it to a dead-letter file instead of retrying it forever.
+            self.reply({"ok": True, "seq": seq} if ok
+                       else {"ok": False, "error": err, "permanent": True})
 
     def reply(self, obj):
         self.wfile.write((json.dumps(obj, sort_keys=True,
