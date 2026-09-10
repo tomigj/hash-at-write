@@ -631,3 +631,58 @@ default policies, so evidence showing one IPv4 allow rule beside a daemon
 listening on a public IPv6 address does not, on its face, show that v6 is
 denied. `ufw status verbose` prints `Default: deny (incoming), allow (outgoing)`
 and is now required in every firewall capture on both hosts.
+
+---
+
+## 2026-09-10 — Step 2 on the primary, and the startup warning's first catch
+
+The operator started the agent before pulling, on a revision predating the
+heartbeat default. The warning fired:
+
+    [!] heartbeats DISABLED: a stopped agent leaves no detectable gap, so a
+        record forged at the next sequence and witnessed normally will verify
+        clean.
+
+The run was halted. Without that warning it would have completed, produced twenty
+clean records, and been filed as step 2 evidence for a configuration the operator
+had not chosen — and specifically for the one configuration under which a record
+forged at the next sequence verifies clean.
+
+It was added on the reasoning that shipping a known-exploitable default silently
+would be a trap. It caught a real misconfiguration within hours, on the first run
+of the code on the machine it was written for. Recorded because "we added a
+warning" and "the warning prevented something" are different claims and only the
+second is worth anything.
+
+The superseded records are archived on the primary rather than deleted. Not wrong
+data, superseded configuration.
+
+### Overhead, preliminary — the hash is not the cost
+
+22 samples on the primary, SSD:
+
+    hash_us                    median   131.1µs      1.73% of total
+    digest_before_write_us     median  3060.3µs     50.06% of total
+    state_us                   median  3530.4µs     48.18% of total
+    total_us                   median  6921.9µs
+
+This confirms the suspicion recorded earlier from a much smaller sample on the
+ledger host, at a considerably larger ratio, and it splits into two parts that
+must not be conflated:
+
+The log write and its fsync is **not** attributable to this design. Any audit
+logger whose records must survive a power cut pays it.
+
+The state-file persist **is** — an atomic temp-write, fsync and rename per event
+so the sequence is recoverable. It roughly doubles the fsync cost and is the
+largest attributable overhead in the system. It is also addressable independently
+of the hash-at-write property, for instance by persisting every N events and
+recovering the remainder from the log's last line, which the agent already does
+on startup.
+
+The hash is under 2%, most of it interpreter time rather than SHA-256.
+
+**This does not retire the README's "overhead not yet measured" limitation.** n=22
+is a smoke test with a 5.2x spread; T6 needs orders of magnitude more samples and
+percentiles rather than means. The temptation to close a known limitation on the
+first favourable number is exactly what the truthfulness rule is for.

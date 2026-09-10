@@ -1,0 +1,146 @@
+Step 2 — agent and emitter writing hashed entries locally, no ledger
+
+HOST:     tg (primary), 10.0.0.173
+OPERATOR: at the physical keyboard
+CAPTURED: 2026-09-10, times UTC
+CONFIG:   --no-push (digests computed and written, nothing sent anywhere)
+          heartbeat 60s, socket in /var/lib/integrity
+
+================================================================================
+FIRST ATTEMPT — HALTED ON A CONFIGURATION WARNING, ARCHIVED NOT DISCARDED
+================================================================================
+
+Thu Sep 10 04:09:29 AM UTC 2026
+[!] heartbeats DISABLED: a stopped agent leaves no detectable gap, so a record
+    forged at the next sequence and witnessed normally will verify clean.
+    Set --heartbeat-interval and run the verifier with --max-silence.
+agent listening on /var/lib/integrity/agent.sock, resuming at seq 1
+
+The agent was started before pulling the current code, on a revision predating
+the commit that made heartbeats default to 60s. The run was halted.
+
+Without the warning this would have completed, produced twenty clean records, and
+been filed as step 2 evidence for a configuration the operator had not chosen --
+and specifically for the one configuration under which a record forged at the
+next sequence verifies clean. The warning exists because shipping that default
+silently would have been a trap; this is its first live catch.
+
+The twenty records from that attempt are archived on the primary at
+~/witnessd-attempt1/ (events.log, timing.log, agent.state) rather than deleted.
+The data is not wrong, its configuration is superseded, and being able to show
+that is better than having it vanish.
+
+================================================================================
+SECOND ATTEMPT — VERBATIM
+================================================================================
+
+Terminal 1, agent:
+
+    Thu Sep 10 04:17:21 AM UTC 2026
+    heartbeat every 60s
+    agent listening on /var/lib/integrity/agent.sock, resuming at seq 1
+
+Terminal 2, twenty events at 04:17:57, every one reporting `local` -- digest
+computed and written, not pushed, which is correct under --no-push.
+
+Verification at 04:18:49:
+
+    21 /var/log/integrity/events.log
+
+    {"digest":"20f983220e7a502e9854e116470cedaffd5cf60e5ed057395742e75658fc0d83","record":{"event":"synthetic event 1/20","seq":1,"ts":"2026-09-10T04:17:57.729Z"}}
+    {"digest":"6a6c8b6007e5eaa73caf27c5bed07efdd304ed9a2ce86f0b4f1054c59a12b263","record":{"event":"synthetic event 2/20","seq":2,"ts":"2026-09-10T04:17:57.738Z"}}
+    {"digest":"381ed7c5185002e74080a3e6a5f9fdc7355e23f3cfca306512ef37094817b6ce","record":{"event":"synthetic event 20/20","seq":20,"ts":"2026-09-10T04:17:57.916Z"}}
+    {"digest":"de504fbcc861cfa6dda1302a605b569de59c6304cf79e284864ca374a8d42657","record":{"event":"__heartbeat__","seq":21,"ts":"2026-09-10T04:18:21.402Z"}}
+
+    1
+    21 records, 0 digest mismatches
+
+Heartbeats, agent left running:
+
+    seq 21 at 2026-09-10T04:18:21.402Z
+    seq 22 at 2026-09-10T04:19:21.413Z
+
+60.011s apart; first beat 60.4s after start. events.log and timing.log both at 22
+rows and in step.
+
+Clean shutdown verified: `agent stopped cleanly`, socket removed, nothing stale
+left in /var/lib/integrity.
+
+================================================================================
+WHAT THE DIGEST RECOMPUTATION DOES AND DOES NOT PROVE
+================================================================================
+
+The check recomputes every stored digest from its record and compares. 21 of 21
+matched.
+
+It imports the same canonical module the agent used, so it is not an independent
+check on the serialisation itself. What it establishes is that the digest stored
+beside each record is the digest of that record under the shared definition --
+which is exactly what the verifier will test from the ledger host. A mismatch
+here would mean the write path was broken before the ledger was involved at all.
+
+================================================================================
+TIMING — 22 SAMPLES, MICROSECONDS
+================================================================================
+
+                           min       med       max      mean
+hash_us                   58.3     131.1     570.3     157.8
+digest_before_write_us  2707.1    3060.3   20032.3    4560.4
+state_us                3120.5    3530.4   11066.1    4388.8
+push_us                    1.0       2.4       4.2       2.6
+total_us                5984.3    6921.9   31158.6    9109.6
+
+    hash as share of total:                1.73%
+    log write + fsync as share of total:  50.06%
+    state-file persist as share of total: 48.18%
+
+Root is on a non-rotational device (/sys/block/sda/queue/rotational = 0), so
+these are SSD fsync costs.
+
+--- The decomposition, because a naive reading gets this badly wrong -----------
+
+Someone reading total_us max 31158 will conclude hash-at-write costs 31ms per
+event. It does not. The hash is 570µs of that at worst and 131µs typically. What
+costs is durability, and it splits in two:
+
+  The log write and its fsync (~3.1ms median) is NOT overhead attributable to
+  this design. Any audit logger whose records must survive a power cut pays it.
+
+  The state-file persist (~3.5ms median) IS this design's addition: an atomic
+  temp-write, fsync and rename per event so the sequence is recoverable. It
+  roughly doubles the fsync cost and is the largest attributable overhead in the
+  system.
+
+  The hash itself is ~1.7%, most of which is Python interpreter time rather than
+  SHA-256.
+
+The defensible claim is therefore that hashing in the write path is not the cost
+-- it is under 2% -- while sequence persistence is, and that is addressable
+without touching the hash-at-write property.
+
+--- Three caveats, and they are not decorative ---------------------------------
+
+1. n=22 is a smoke test, not a measurement. T6 needs orders of magnitude more
+   samples. Nothing here belongs in a limitations section as "measured".
+
+2. Variance is severe: 5984µs to 31159µs, a 5.2x spread across 22 samples. Report
+   percentiles, never a mean. The mean (9110) sits well above the median (6922)
+   because of a single outlier.
+
+3. push_us is meaningless in this run. Under --no-push it measures a branch not
+   taken -- 1-4µs of bookkeeping. It is not a network cost and must not be
+   presented as one.
+
+digest_before_write_us is reported above purely as the log-write-and-fsync
+interval. It is not offered as evidence for claim 1 anywhere.
+
+================================================================================
+STATUS
+================================================================================
+
+Step 2 complete. Agent and emitter run on the primary, twenty-one records written
+with digests, all verified, heartbeat cadence correct at the configured interval,
+clean shutdown with no stale socket.
+
+The README's "overhead not yet measured" limitation STANDS. This run does not
+retire it -- see caveat 1.
