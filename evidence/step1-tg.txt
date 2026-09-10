@@ -125,3 +125,28 @@ and listening via socket activation.
 
 Not yet captured: `ufw status verbose` showing default policies, and a
 functional connectivity test from the ledger. Both outstanding.
+
+================================================================================
+DEFAULT POLICIES — closes the IPv6 question
+================================================================================
+
+tomigj@tg:~/witnessd$ sudo ufw status verbose
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW IN    10.0.0.212                 # verifier pull from ledger
+
+`Default: deny (incoming)` applies to IPv6 as well, since IPV6=yes in
+/etc/default/ufw on this host. The daemon listening on [::]:22 is therefore
+filtered, and that is demonstrable from this capture rather than inferred from
+the absence of a v6 allow rule.
+
+`disabled (routed)` confirms no forwarding, which is correct for a host that is
+neither a router nor a bridge between the two zones.
+
+`Logging: on (low)` means blocked packets are written to /var/log/ufw.log. This
+is what makes the connectivity test produce a positive artifact -- see below.
