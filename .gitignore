@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# Internal build brief. Deliberately NOT published: it frames the project in
+# terms of a federal filing and its exhibits, which is not something a public
+# repository should carry. Kept local; remove this line only on purpose.
+POC_BUILD_SPEC.md
