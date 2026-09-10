@@ -390,9 +390,12 @@ def main():
     p.add_argument("--ledger-port", type=int, default=9900)
     p.add_argument("--push-timeout", type=float, default=2.0)
     p.add_argument("--spool-interval", type=float, default=10.0)
-    p.add_argument("--heartbeat-interval", type=float, default=0,
+    p.add_argument("--heartbeat-interval", type=float, default=60,
                    help="emit a liveness beat every N seconds so that a stopped "
-                        "agent is detectable as silence. 0 disables.")
+                        "agent is detectable as silence. 0 disables, which leaves "
+                        "an agent stopped to insert records undetectable; pair "
+                        "with the verifier's --max-silence, which cannot be set "
+                        "tighter than this interval plus jitter.")
     p.add_argument("--no-push", action="store_true",
                    help="write hashed entries locally without pushing (build step 2)")
     p.add_argument("--no-hash", action="store_true",

@@ -399,9 +399,13 @@ def main():
     p.add_argument("--ssh-timeout", type=int, default=10)
     p.add_argument("--log-file", help="read the log from a local path instead of "
                                       "pulling over SSH (testing only)")
-    p.add_argument("--max-silence", type=float, default=0,
+    p.add_argument("--max-silence", type=float, default=180,
                    help="alert if this many seconds pass with no digests received. "
-                        "Pair with the agent's --heartbeat-interval; 0 disables.")
+                        "Must exceed the agent's --heartbeat-interval plus normal "
+                        "jitter or every missed beat is a false positive; the "
+                        "default is three times the default interval. This value, "
+                        "not the interval, is the window an attacker must fit a "
+                        "stop inside. 0 disables.")
     p.add_argument("--max-skew", type=float, default=300,
                    help="alert when a record's own timestamp precedes the "
                         "ledger's receipt of its digest by more than this many "
