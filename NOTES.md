@@ -7,7 +7,7 @@ to look like it was always right.
 
 ---
 
-## 2026-09-10 — Environment
+## Environment
 
 Two physical hosts, both laptops belonging to the same user:
 
@@ -35,7 +35,7 @@ account creation can be run unattended there.
 
 ---
 
-## 2026-09-10 — Deviation from the spec's file layout
+## Deviation from the spec's file layout
 
 Added `common/canonical.py`, which is not in the spec's §5 layout.
 
@@ -48,7 +48,7 @@ possibility rather than relying on discipline.
 
 ---
 
-## 2026-09-10 — Two bugs in the agent, found by smoke test
+## Two bugs in the agent, found by smoke test
 
 1. **`push_us` in the timing log silently included the state-file fsync**, so it
    overstated the cost of the ledger push. Caught when the number looked too
@@ -71,7 +71,7 @@ property.
 
 ---
 
-## 2026-09-10 — Finding: the spec's verification loop is one-directional
+## Finding: the spec's verification loop is one-directional
 
 Raised by the second Claude session working on `tg`, checked against the spec
 text, and confirmed.
@@ -100,7 +100,7 @@ be reflected in the claim list and gain its own scenario in the test protocol.
 
 ---
 
-## 2026-09-10 — Finding: what the SSH forced command actually protects
+## Finding: what the SSH forced command actually protects
 
 Spec §3.4 states "The forced command is what makes claim 4 real." That is
 imprecise and the write-up should not repeat it.
@@ -124,7 +124,7 @@ rather than accepted.
 
 ---
 
-## 2026-09-10 — Heartbeat, added but disabled by default
+## Heartbeat, added but disabled by default
 
 Consequence of the finding above. Even with `UNWITNESSED` detection, a stopped
 agent produces a window in which nothing is witnessed at all. A liveness beat on
@@ -139,7 +139,7 @@ Off by default (`--heartbeat-interval 0`) pending a decision on the interval.
 
 ---
 
-## 2026-09-10 — Three bugs in the first implementation, all found by testing
+## Three bugs in the first implementation, all found by testing
 
 Two reported by the session on `tg` after reading the pushed code, both with
 working reproductions. A third found while confirming them. All three were
@@ -232,7 +232,7 @@ spam as bug 2.
 
 ---
 
-## 2026-09-10 — Two more holes, both reproduced
+## Two more holes, both reproduced
 
 Found by the `tg` session reviewing the fixes above, reproduced here before
 being fixed. One of them was made materially worse by the bug 3 fix.
@@ -313,7 +313,7 @@ exposed. A default that quietly leaves this open would be a trap.
 
 ---
 
-## 2026-09-10 — Two more, and a fix that was wrong the first time
+## Two more, and a fix that was wrong the first time
 
 ### 6. The sequence window was walkable
 
@@ -367,7 +367,7 @@ minutes, hours, days.
 
 ---
 
-## 2026-09-10 — Regression suite
+## Regression suite
 
 `tests/repro_scenarios.py` and `tests/repro_dropped_ack.py`, written by the
 session on `tg` during review and committed here. Six fixtures covering every
@@ -386,7 +386,7 @@ one of them was found by testing rather than by inspection.
 
 ---
 
-## 2026-09-10 — The soft label was attacker-inducible
+## The soft label was attacker-inducible
 
 Raised by the `tg` session in answer to a question put to it: is
 OUTAGE RECOVERY the useful label, or only the honest one?
@@ -419,7 +419,7 @@ longer only the in-order forgery: without heartbeats, the softer alert labels
 become attacker-controllable. Heartbeats should be treated as a prerequisite for
 any run that produces evidence, not as a tuning parameter.
 
-## 2026-09-10 — Walk: bounded to linear cost, not closed
+## Walk: bounded to linear cost, not closed
 
 The gap bound stops the free walk but not one paid for. Filling seqs 2..1000
 with real submissions inflates the chained count, after which the jump to 1999
@@ -434,7 +434,7 @@ README.
 
 ---
 
-## 2026-09-10 — The design boundary: fabrication is not detectable
+## The design boundary: fabrication is not detectable
 
 Raised by the `tg` session, reproduced here against the live stack rather than a
 fixture — real agent, real ledgerd, real push path, every check enabled.
@@ -481,7 +481,7 @@ the standard being held everywhere else applies to reports about the work too.
 
 ---
 
-## 2026-09-10 — Correction: a "Verified" claim that did not hold
+## Correction: a "Verified" claim that did not hold
 
 The Known limitations bullet added for fabrication stated: "a fabricated SSH
 authentication with a truthful timestamp, inserted during an eight-second stop
@@ -552,7 +552,7 @@ is a different quality of claim.
 
 ---
 
-## 2026-09-10 — `systemctl is-active ssh` was the wrong check, on both hosts
+## `systemctl is-active ssh` was the wrong check, on both hosts
 
 Step 1 surfaced this on `tg`, and checking the same thing here showed it had
 also been wrong in the opposite direction on `daddy`. Recorded in full because
@@ -605,7 +605,7 @@ is IPv4-only, so inbound v6 SSH is denied by policy rather than by luck. Run in
 the original order on a host where the package needed installing, the daemon
 would have come up on a public v6 address ahead of any firewall.
 
-### Correction and clarification, 03:37 UTC
+### Correction and clarification
 
 Two updates to the entry above, both from the operator completing step 1 on `tg`.
 
@@ -634,7 +634,7 @@ and is now required in every firewall capture on both hosts.
 
 ---
 
-## 2026-09-10 — Step 2 on the primary, and the startup warning's first catch
+## Step 2 on the primary, and the startup warning's first catch
 
 The operator started the agent before pulling, on a revision predating the
 heartbeat default. The warning fired:
@@ -689,7 +689,7 @@ first favourable number is exactly what the truthfulness rule is for.
 
 ---
 
-## 2026-09-10 — Overhead: the hash is not the cost, the synchronous push is
+## Overhead: the hash is not the cost, the synchronous push is
 
 Recorded before T6 runs, deliberately. T6 measures per-event overhead, and
 without this note its number will be read as the cost of hashing. It is not.
@@ -724,25 +724,62 @@ idle gap will settle it.
     SHA-256 + canonical JSON       ~130µs      1.7%    inherent, negligible
     log write + fsync              ~3.1ms              any durable logger pays this
     state-file persist             ~3.5ms              this design's addition
-    synchronous acknowledged push   7-96ms   80-95%    this design's addition, dominant
+    synchronous acknowledged push   ~6ms      43%     this design's addition, largest
 
 The README currently says "Hashing in the write path imposes overhead on the
 logging host. Not yet measured." The measurement says hashing is not the
-overhead. It is 1.7%. The synchronous acknowledged push is, by two orders of
-magnitude, and the state-file persist is second.
+overhead. It is 1-2%. The synchronous acknowledged push is the largest single
+component at 43%, with the two local fsyncs together making up most of the rest.
 
 That is a considerably more useful thing to tell a prospective adopter than a
 single aggregate number, and it is a better answer than the limitation implies:
 the expensive parts are engineering choices that can be revisited, while the part
 that is inherent to hash-at-write is negligible.
 
-### The architectural consequence, which matters more than the number
+### Correction: those figures measured an idle radio, not the architecture
 
-`handle_event` holds `self.lock` across `_push_with_retry`. For seq 24 the
-application was blocked 112.6ms on one log write, 76ms of it waiting on the
-ledger, and every other event queues behind it. That is a throughput ceiling
-around 9-12 events/sec on this hardware, set by network latency rather than by
-anything cryptographic.
+The paragraphs above were computed from six samples taken 60 seconds apart --
+which is to say, six radio wakeups. They reported a throughput ceiling of 9-12
+events/sec and a push share of 80-95%. Both are wrong as statements about the
+design. They describe the wifi power-save behaviour of an idle laptop.
+
+A back-to-back run of 50 events with no idle gap settles it:
+
+    50 events in 0.832s -- 60.1 events/sec, 16.6 ms/event
+    push_us   min 3985  p25 5306  med 5966  p75 7581  max 49594
+    total_us  min 11333 p25 12760 med 13806 p75 16194 max 58062
+    over 50ms: 0 of 50
+
+In arrival order the first event pays 49594us and every one after it collapses
+into a 4-8ms band. One wakeup, then nothing. The median push of 5966us sits just
+under the 7-9ms the RTT-plus-fsync budget predicted, so that budget closes even
+more tightly than it did on six samples.
+
+Corrected, warm-radio:
+
+    throughput      60.1 events/sec       not 9-12
+    push share      5966/13806 = 43%      not 80-95%
+    hash share      138/13806 = 1.0%      consistent with the 1.7% measured earlier
+    remainder       ~7.8ms = 56%          log fsync + state fsync
+
+### Both regimes are real and the write-up needs both
+
+    isolated event, idle radio     ~90-110ms latency     what an occasional event costs
+    sustained burst, warm radio    ~14ms, 60/sec         what volume costs
+
+A production audit log with continuous traffic lives in the second regime. A
+quiet system where events arrive minutes apart lives in the first, and every
+event pays a wakeup. Reporting only one misleads, in opposite directions
+depending which is picked. T6 must therefore state the traffic pattern it
+measured, not only the numbers.
+
+### The architectural consequence, which survives but shrinks
+
+`handle_event` holds `self.lock` across `_push_with_retry`. The push remains the
+largest single attributable component at 43%, and the write path is still
+serialised behind the network. But at 60 events/sec, comparable to the two local
+fsyncs rather than dwarfing them, this is a design question rather than a
+throughput crisis, and it should be framed that way.
 
 The open design question, stated rather than quietly fixed mid-build: must the
 push happen inside the lock? The digest is already durable on disk before the
