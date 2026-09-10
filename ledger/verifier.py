@@ -41,6 +41,12 @@ from common.canonical import (GENESIS, HEARTBEAT_EVENT, compute_digest,  # noqa:
                               next_chain_hash)
 
 
+# A record's timestamp may legitimately precede its receipt by the push
+# latency, or by a whole outage if it was spooled. It may never meaningfully
+# follow it; this allows only for clock drift between the two hosts.
+CLOCK_TOLERANCE = 60.0
+
+
 def utc_now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
@@ -119,8 +125,9 @@ def parse_log(text):
     return records, duplicates, malformed
 
 
-def verify(chain, records, duplicates, malformed, max_silence):
+def verify(chain, records, duplicates, malformed, max_silence, max_skew):
     alerts = []
+    max_log_seq = max(records) if records else None
 
     for seq in sorted(set(duplicates)):
         alerts.append(Alert("DUPLICATE", seq, "sequence number appears more than once in the log"))
@@ -135,12 +142,48 @@ def verify(chain, records, duplicates, malformed, max_silence):
 
         record = records.get(seq)
         if record is None:
-            alerts.append(Alert("DELETION", seq, "digest is chained but no record with this sequence exists in the log"))
+            detail = "digest is chained but no record with this sequence exists in the log"
+            if max_log_seq is not None and seq > max_log_seq:
+                # Beyond the log's highest sequence this is ambiguous between a
+                # truncated tail and a digest for a record that never existed.
+                # Say so rather than asserting the stronger claim.
+                detail += (f" (beyond the log's highest sequence {max_log_seq}: "
+                           f"either the tail was truncated or this digest was "
+                           f"submitted for a record that never existed)")
+            alerts.append(Alert("DELETION", seq, detail))
         else:
             recomputed = compute_digest(record)
             if recomputed != digest:
                 alerts.append(Alert("TAMPER", seq,
                                     f"recomputed {recomputed[:16]}... != chained {digest[:16]}..."))
+
+            # A record asserts when it happened; the ledger records when its
+            # digest arrived. The first is written by the primary and is
+            # attacker-controlled, the second is not. They sit in two files read
+            # on the same pass, and comparing them costs nothing.
+            #
+            # This matters for what an audit trail is FOR. Detecting that a
+            # record was not altered is only half the question; the other half
+            # is when it happened. A forged record witnessed normally at the
+            # next sequence verifies clean on every other check -- backdating it
+            # is free unless this comparison is made.
+            try:
+                claimed, received = parse_ts(record["ts"]), parse_ts(entry["received"])
+            except (KeyError, ValueError):
+                pass
+            else:
+                skew = (received - claimed).total_seconds()
+                if skew > max_skew:
+                    alerts.append(Alert("BACKDATED", seq,
+                        f"record claims {record['ts']} but its digest reached the "
+                        f"ledger at {entry['received']} -- {skew / 86400:.1f} days later "
+                        f"(threshold {max_skew:.0f}s)"))
+                elif -skew > CLOCK_TOLERANCE:
+                    # A record cannot legitimately be written after its own
+                    # digest was received.
+                    alerts.append(Alert("FUTURE DATED", seq,
+                        f"record claims {record['ts']}, which is {-skew:.0f}s AFTER "
+                        f"its digest was received at {entry['received']}"))
 
         # --- chain recomputation from genesis ------------------------------
         computed = next_chain_hash(digest, computed)
@@ -220,7 +263,8 @@ def run_once(args):
     else:
         records, duplicates, malformed = parse_log(text)
         chain = load_chain(args.chain)
-        alerts = verify(chain, records, duplicates, malformed, args.max_silence)
+        alerts = verify(chain, records, duplicates, malformed, args.max_silence,
+                        args.max_skew)
 
     heartbeats = sum(1 for r in records.values() if r.get("event") == HEARTBEAT_EVENT)
     outcome = {
@@ -259,6 +303,11 @@ def main():
     p.add_argument("--max-silence", type=float, default=0,
                    help="alert if this many seconds pass with no digests received. "
                         "Pair with the agent's --heartbeat-interval; 0 disables.")
+    p.add_argument("--max-skew", type=float, default=300,
+                   help="alert when a record's own timestamp precedes the "
+                        "ledger's receipt of its digest by more than this many "
+                        "seconds. Recovery after a long ledger outage can exceed "
+                        "it legitimately, and should be visible when it does.")
     p.add_argument("--interval", type=float, default=0,
                    help="run continuously every N seconds instead of once")
     args = p.parse_args()
