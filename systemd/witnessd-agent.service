@@ -6,12 +6,33 @@
 # a directory nothing cleans up. systemd creates /run/integrity at start with
 # the ownership and mode below, and removes it at stop.
 #
-# Restart=always has a consequence worth understanding rather than
-# inheriting: it narrows the window in which a stopped agent can be used to
-# insert unwitnessed records. An attacker who kills the process gets it back
-# within RestartSec. To keep it down they must use `systemctl stop` or mask the
-# unit, both of which leave a journal record — which is a meaningfully harder
-# and noisier action than `kill`.
+# Restart=always, and it must be `always` rather than `on-failure`. This shipped
+# as on-failure and was wrong in a way that inverted the property it was meant
+# to provide.
+#
+# The agent catches SIGTERM and exits 0, so that shutdown is clean and no stale
+# socket is left behind. systemd's on-failure restarts on a non-zero exit or on
+# death by signal, but explicitly EXCLUDES SIGTERM, and never restarts a clean
+# exit at all. Measured on this code:
+#
+#     kill <pid>      SIGTERM -> exit 0   -> NOT restarted, stays down
+#     kill -9 <pid>   SIGKILL -> exit 137 -> restarted after RestartSec
+#
+# The cheap quiet attack worked; the loud one was defeated. Exactly backwards.
+#
+# With Restart=always any exit brings the agent back, while `systemctl stop` and
+# masking still work, because systemd distinguishes an administrative stop from
+# a process exit. That is the intended property: killing the agent is
+# ineffective, and keeping it down requires an action that leaves a journal
+# record.
+#
+# Making the SIGTERM handler exit non-zero would also have worked, and is worse:
+# every ordinary `systemctl stop` would then look like a failure in the journal,
+# putting a false failure signal into the records of a system whose entire
+# purpose is trustworthy records.
+#
+# This narrows the fabrication window. It does not close it — nothing can, while
+# an attacker with root can write the records the agent would have written.
 #
 # NOTE: the repository path differs between the two hosts. On the primary it is
 # ~/witnessd; on the ledger it is ~/NIW. Adjust WorkingDirectory and ExecStart
