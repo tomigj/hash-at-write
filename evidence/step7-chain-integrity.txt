@@ -1,0 +1,135 @@
+Step 7 — chain recomputation and break detection
+
+CAPTURED: 2026-09-10, times UTC
+HOST:     daddy 10.0.0.212 (ledger), where the chain lives
+
+Two halves. Whether the live chain can be altered at all, and whether the
+verifier detects an alteration when one exists.
+
+================================================================================
+1. THE LIVE CHAIN RESISTS MODIFICATION — 05:20:18 UTC
+================================================================================
+
+58 entries, carrying chattr +a since before its first byte was written.
+
+    sha256 before: 9394bc3ba91ce4fa6dbcb3aaf9a9fbe7cc53355517a64c3a2a9f0d4309ad2353
+
+    sed -i in place        sed: cannot rename /var/lib/ledger/sedJG3rP9:
+                           Operation not permitted
+    truncate to zero       Operation not permitted
+    open(path, "w")        [Errno 1] Operation not permitted
+    seek + overwrite byte  [Errno 1] Operation not permitted
+
+    sha256 after:  9394bc3ba91ce4fa6dbcb3aaf9a9fbe7cc53355517a64c3a2a9f0d4309ad2353
+
+Unchanged. Every modification attempt refused by the kernel.
+
+Note the sed failure specifically: sed -i works by writing a temporary file and
+renaming it over the original. The rename is what was refused, which is a
+different mechanism from a blocked write and closes an obvious workaround.
+
+================================================================================
+2. UNLINK AND RENAME — TESTED ON A PROBE, NOT ON THE EVIDENCE
+================================================================================
+
+chattr +a blocks writes to a file. Whether it also blocks deletion is a separate
+question, and it matters: /var/lib/ledger is owned by the login user and is
+writable by them, so if +a did not cover unlink, the chain could be destroyed
+without being modified.
+
+This was NOT tested on the live chain. If the reading of the kernel had been
+wrong, the test would have destroyed the evidence it was meant to protect. A
+throwaway probe file was created with root and given +a, and the attempts were
+made against that.
+
+    rm                  Operation not permitted    file survived
+    mv (rename away)    Operation not permitted    file survived
+    chattr -a as user   Operation not permitted    attribute intact
+
+So an append-only file cannot be deleted or renamed by a non-root user, and the
+attribute cannot be cleared without root. That extends the property from "cannot
+be modified" to "cannot be removed", which is the version claim 4 needs.
+
+--- Two results from this probe are INVALID and are recorded as such ----------
+
+An earlier append attempt against the probe failed with "Permission denied". That
+proves nothing about +a: the probe is root:root mode 644 and the attempt ran as
+the login user, so ownership alone explains it. Append under +a is instead
+demonstrated by the running system -- ledgerd has appended 58 entries to
+chain.jsonl, which is tomigj:tomigj and has carried +a throughout.
+
+A hard-link attempt also failed, first with "Invalid cross-device link" (the
+target was on tmpfs, a different filesystem) and then with "Permission denied"
+when repeated on the same filesystem. The second is still confounded:
+fs.protected_hardlinks = 1 on this host, which permits a user to hardlink only to
+files they own or can write, and the probe is root-owned. The refusal is fully
+explained without invoking +a.
+
+WHETHER +a BLOCKS HARD LINKS IS THEREFORE UNTESTED HERE. Separating it needs a
+probe owned by the login user and carrying +a, which requires root to create.
+Recorded as untested rather than resolved by guessing which mechanism refused it.
+
+================================================================================
+3. BREAK DETECTION — MUTATIONS ON COPIES, SINCE THE ORIGINAL CANNOT BE TOUCHED
+================================================================================
+
+Three mutations, each on a copy of the live chain, each verified against the log
+pulled from the primary.
+
+--- BREAK 1: a digest altered mid-chain (seq 30) ------------------------------
+
+    seq 30 digest 53d1b9f3635749a1... -> ffffffffffffffff...
+
+    TAMPER       seq=30  recomputed 53d1b9f3635749a1... != chained ffffffffffffffff...
+    CHAIN BREAK  seq=30  stored 8bdeea7c6bab9930... != recomputed 74e07e4684190d4f...
+
+Two alerts, and both are correct. The digest no longer matches the record it
+claims to cover, AND the chain no longer recomputes from that point. An attacker
+altering a chained digest has to defeat both.
+
+--- BREAK 2: a stored chain_hash altered, digests untouched (seq 40) ----------
+
+    seq 40 chain_hash 5eb71b136c016a5f... -> 0000...
+
+    CHAIN BREAK  seq=40  stored 0000000000000000... != recomputed 5eb71b136c016a5f...
+
+One alert, not two. No TAMPER, because every digest still matches its record.
+This is the case that shows the two checks are independent: digest-versus-record
+and chain-versus-recomputation test different things, and only the second catches
+an alteration confined to the chain's own linkage.
+
+--- BREAK 3: two entries reordered, no content changed at all ----------------
+
+    swapped chain positions 20 and 21
+
+    CHAIN BREAK  seq=21  stored f2adf6894ef91e32... != recomputed 3da3cd6443ca02b1...
+
+No byte of any entry was modified. Only their order changed. The chain binds
+order as well as content, so reordering breaks it -- which is what makes
+"concealing a single edit requires rewriting the entire subsequent chain" true
+rather than merely stated.
+
+--- The DELETION alert present in all three ----------------------------------
+
+Every run above also reported:
+
+    DELETION seq=58  (beyond the log's highest sequence 57: either the tail was
+                      truncated or this digest was submitted for a record that
+                      never existed)
+
+That is step 6's tail truncation still in place on the primary at the time these
+were run. It is not part of this test and is noted so it is not read as one.
+
+================================================================================
+4. STATUS
+================================================================================
+
+Step 7 complete, with one gap recorded rather than papered over.
+
+Established: the live chain cannot be modified, deleted or renamed by the
+operator of the host it sits on, its attribute cannot be cleared without root,
+and the verifier detects alteration of a digest, alteration of the chain linkage,
+and reordering with no content change.
+
+Not established: whether +a blocks hard links. Untested here for the reason
+given in section 2.
