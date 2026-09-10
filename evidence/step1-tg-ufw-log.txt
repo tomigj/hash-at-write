@@ -1,0 +1,53 @@
+ufw log — primary host `tg`, captured 2026-09-10 03:40:57 UTC
+
+MAC field redacted. Every line carried an identical
+`MAC=<tg wifi NIC>:<home router>:08:00`. Those are permanent, globally unique
+identifiers for the operator's personal laptop and home router; this repository
+is public. The evidentiary content of a firewall log line is the timestamp, SRC,
+DST, DPT and verdict, none of which is in the MAC field. See evidence/README.md.
+
+Local timestamps are UTC-4.
+
+================================================================================
+RAW LINES — nine, all [UFW BLOCK], 23:35:18–23:35:41 local (03:35:18–03:35:41 UTC)
+================================================================================
+
+23:35:18.811251 [UFW BLOCK] IN=wlp59s0 OUT= MAC=<redacted> SRC=54.167.136.58  DST=10.0.0.173 LEN=52 TTL=241 ID=11423 DF PROTO=TCP SPT=8886 DPT=41086 WINDOW=8  ACK URGP=0
+23:35:26.293132 [UFW BLOCK] IN=wlp59s0 OUT= MAC=<redacted> SRC=160.79.104.10 DST=10.0.0.173 LEN=91 TTL=57  ID=55275 DF PROTO=TCP SPT=443  DPT=44544 WINDOW=58 ACK PSH URGP=0
+23:35:26.538403 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55276 ... SPT=443 DPT=44544 ... ACK PSH
+23:35:26.799504 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55277 ... SPT=443 DPT=44544 ... ACK PSH
+23:35:27.259308 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55278 ... SPT=443 DPT=44544 ... ACK PSH
+23:35:28.269029 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55279 ... SPT=443 DPT=44544 ... ACK PSH
+23:35:30.277648 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55280 ... SPT=443 DPT=44544 ... ACK PSH
+23:35:34.070612 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55281 ... SPT=443 DPT=44544 ... ACK PSH
+23:35:41.953595 [UFW BLOCK] ... SRC=160.79.104.10 ... ID=55282 ... SPT=443 DPT=44544 ... ACK PSH
+
+================================================================================
+ANNOTATION — THIS IS NOT INBOUND ATTACK TRAFFIC
+================================================================================
+
+These lines must not be filed as evidence of blocking unauthorised access. They
+are this host's OWN outbound traffic being severed by its OWN firewall coming up.
+
+ufw was enabled at 03:35:08–03:35:14 UTC. Every block falls 4–27 seconds later.
+
+Eight of the nine are a single flow: 160.79.104.10:443 -> 10.0.0.173:44544, with
+IP IDs incrementing 55275→55282 and intervals backing off 0.25s, 0.26s, 0.46s,
+1.0s, 2.0s, 3.8s, 7.9s. That is one server retransmitting into a connection whose
+return path had just been cut. 160.79.104.10 is Anthropic; port 44544 was a local
+ephemeral port belonging to an established HTTPS connection, present in an `ss`
+capture taken before the firewall was enabled:
+
+    ESTAB 10.0.0.173:44544 -> 160.79.104.10:443
+
+Port 44544 was subsequently confirmed gone from the connection table and replaced
+by a new connection. The ninth line, 54.167.136.58:8886 -> :41086, is the same
+shape: a bare ACK into another pre-existing outbound flow.
+
+Cause: enabling ufw installs a fresh ruleset whose ESTABLISHED,RELATED accept
+only matches flows conntrack is tracking under the new rules. Connections
+predating the enable lose their return path and die. Outbound is permitted, so
+everything reconnected on its own.
+
+Filed unannotated beside a claim about blocking unauthorised access, these read
+as nine inbound attacks in the first thirty seconds after the firewall came up.
