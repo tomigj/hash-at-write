@@ -1,0 +1,161 @@
+Step 6 — tamper and deletion detection, against a live log
+
+CAPTURED: 2026-09-10, times UTC
+PRIMARY:  tg 10.0.0.173, log at /var/log/integrity/events.log
+LEDGER:   daddy 10.0.0.212, verifying over the restricted SSH channel
+
+Targets were chosen by CONTENT and named before any test ran, not by index. The
+log was 50 records of "synthetic event N/50"; altering one of those demonstrates
+the mechanism but makes a weak exhibit. Two realistic authentication records were
+emitted first and those were attacked, because the README's argument is about an
+institution unable to distinguish "no one accessed that record" from "the
+evidence that someone did was removed", and it cites the 2016 SWIFT attacks in
+which malware suppressed the local record of fraudulent transfers.
+
+    seq 57  sshd[2041]: Accepted publickey for tomigj from 10.0.0.212 port 54892 ssh2
+    seq 58  sshd[2087]: Accepted password for root from 203.0.113.47 port 51022 ssh2
+
+Both reported `pushed`, not SPOOLED, before the log was touched. For the tamper
+test that is incidental. For the deletion test it is the entire mechanism: with
+the digest still only on the primary, the deletion would be undetectable.
+
+They are 57 and 58 rather than 55 and 56 because heartbeats took the intervening
+sequences. Sequence numbers are not assumed contiguous with emission order.
+
+Backup taken before any edit, 05:12:06 UTC:
+
+    48b6898f61084a806e41b2be2619de4f324b5a3a3faaf066c7f76630e9fb7641
+
+================================================================================
+T2 — TAMPER
+================================================================================
+
+One line, one field. The source address altered from 10.0.0.212 to 10.0.0.99,
+leaving seq, ts and the stored digest byte-identical -- which is the realistic
+shape, because an attacker cannot recompute a digest the ledger already holds.
+
+Predicted on the primary before verification ran:
+
+    stored     3837d93eb51c596d4076341683427f3c07ac451636b7da114f78d679916b2c8b
+    recomputed 58def3401134675ab2dcb55295226da1242b110a5f294c2714f889e05cce9517
+
+Verification from the ledger, --max-silence 0 to isolate the signal:
+
+    [05:13:42] chain=58 log=58 heartbeats=6 -> ALERTS
+      TAMPER  seq=57  recomputed 58def3401134675a... != chained 3837d93eb51c596d...
+      exit 1
+
+The value predicted independently on the primary and the value computed by the
+verifier on the ledger are identical. Two hosts, two separate implementations of
+the check, same result.
+
+--- The silence threshold demonstrated itself rather than being asserted -------
+
+The agent must be stopped to edit the log cleanly, so the stop is itself part of
+the attack. Verification was run before and after the threshold was crossed:
+
+    at 150s elapsed:  TAMPER only, no SILENCE
+    at 209s elapsed:  TAMPER + SILENCE seq=58->now, 3.5 minutes
+
+Run at 150s, seen to be silent, waited 45 seconds, run again. The artefact shows
+the boundary being crossed rather than a single reading taken afterwards.
+
+That pairing is the exhibit: the attacker altered one field of one record, and
+the system caught both the alteration AND the fact that the agent had to be
+stopped to make it.
+
+================================================================================
+T3 — DELETION, WHICH TURNED OUT TO BE THE HARDER CASE
+================================================================================
+
+Restored to pristine first and confirmed byte-identical, so the deletion starts
+from a clean log rather than a tampered one. Then the root login record was
+removed entirely.
+
+The result was subtler than planned. Seq 58 was the LAST record, so removing it
+left the log contiguous:
+
+    records: 57
+    digest mismatches: 0        every remaining record hashes correctly
+    seq range: 1-57
+    missing sequences: []       NO GAP
+
+There is no hole to notice. The log does not look like a log with a record
+missing -- it looks like a log that ends at 57. Nothing on the primary
+distinguishes "the root login was deleted" from "the agent stopped before it
+happened". An auditor with root on that machine, examining the file with every
+tool available to them, finds a perfect log.
+
+Verification from the ledger:
+
+    [05:18:53] chain=58 log=57 heartbeats=6 -> ALERTS
+      DELETION  seq=58  digest is chained but no record with this sequence exists
+                        in the log (beyond the log's highest sequence 57: either
+                        the tail was truncated or this digest was submitted for a
+                        record that never existed)
+      SILENCE   seq=58->now  7.7 minutes
+      exit 1
+
+What the ledger holds for a record that no longer exists anywhere on the primary:
+
+    seq      58
+    digest   b18279264be4d6f17c8bb677d503efcf0135148c52e07f943e4e446805590c0e
+    received 2026-09-10T05:11:14.596Z
+    chained onto db376d4243f8787b...
+
+Received three minutes before the record ceased to exist.
+
+--- The alert hedges, and the hedge is correct --------------------------------
+
+Beyond the log's highest sequence, the ledger genuinely cannot distinguish a
+truncated tail from a digest submitted for a record that never existed. We know
+it was truncation because we did it. The ledger does not, and the alert says so
+rather than asserting the stronger claim.
+
+A mid-log excision would produce an unambiguous DELETION with a real gap and no
+hedge. That test is outstanding and should be run so both cases sit side by side
+in the exhibit, with the reason they read differently stated -- rather than a
+reviewer noticing the hedge alone and wondering whether it indicates weakness.
+
+================================================================================
+RESTORE — THE TESTS ALTERED NOTHING PERMANENTLY
+================================================================================
+
+    48b6898f61084a806e41b2be2619de4f324b5a3a3faaf066c7f76630e9fb7641  events.log
+    48b6898f61084a806e41b2be2619de4f324b5a3a3faaf066c7f76630e9fb7641  pristine
+
+    records 58  mismatches 0  seq 1-58  missing []
+    seq 57 restored to 10.0.0.212, seq 58 present again
+
+Verification, --max-silence 0:
+
+    [05:31:59] chain=58 log=58 heartbeats=6 -> CLEAN      exit 0
+
+At the default threshold, with the agent still deliberately stopped:
+
+    [05:31:59] SILENCE seq=58->now 20.8 minutes                exit 1
+
+Expected, and captured separately so it is not read as the restore having left
+something behind.
+
+--- The quietest evidence here, and the strongest ----------------------------
+
+    chain sha256 at 05:20:18 (step 7):  9394bc3ba91ce4fa6dbcb3aaf9a9fbe7cc53355517a64c3a2a9f0d4309ad2353
+    chain sha256 at 05:31:59 (restore): 9394bc3ba91ce4fa6dbcb3aaf9a9fbe7cc53355517a64c3a2a9f0d4309ad2353
+
+Identical. The chain was never touched across the tamper test, the deletion test,
+and four deliberate modification attempts against it.
+
+The same chain that reported TAMPER at 57 and DELETION at 58 now reports CLEAN.
+It did not need to be rebuilt, reset or reconciled at any point -- because
+nothing on the primary was ever able to affect it. That is the split-custody
+property demonstrated by the ABSENCE of a recovery step, which is a quieter form
+of evidence than the alerts and a stronger one.
+
+================================================================================
+STATUS
+================================================================================
+
+Step 6 complete for tamper and tail-truncation. Mid-log excision outstanding; the
+pristine log is the correct starting state for it and keeps indefinitely, so
+deferring it costs nothing.
