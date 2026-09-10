@@ -604,3 +604,30 @@ four globally routable IPv6 addresses and a default v6 route, and the allow rule
 is IPv4-only, so inbound v6 SSH is denied by policy rather than by luck. Run in
 the original order on a host where the package needed installing, the daemon
 would have come up on a public v6 address ahead of any firewall.
+
+### Correction and clarification, 03:37 UTC
+
+Two updates to the entry above, both from the operator completing step 1 on `tg`.
+
+**The `un` dpkg state was accurate at 03:35 and is now stale.** The operator
+installed `openssh-server`; `tg` now has it at 1:9.6p1-3ubuntu13.19 with the
+daemon listening.
+
+**`ssh.service` reading `inactive` and `disabled` on `tg` is correct, not a
+failure.** Ubuntu 24.04 ships SSH socket-activated: `ssh.socket` is enabled and
+holds the listener, `ssh.service` is spawned per connection. So the earlier
+diagnosis was right about `daddy` — socket activation, listening — and the same
+mechanism applies on `tg` now that the package is present. The check
+`systemctl is-active ssh` will report `inactive` on both hosts forever while SSH
+works perfectly.
+
+This must not be "fixed" by running `systemctl enable --now ssh.service`.
+Doing so conflicts with the socket, disables socket activation, and moves the
+host off the distribution default — altering a configuration that is itself
+evidence, to make a status line read differently.
+
+**Capture protocol changed as a result.** `ufw status numbered` does not print
+default policies, so evidence showing one IPv4 allow rule beside a daemon
+listening on a public IPv6 address does not, on its face, show that v6 is
+denied. `ufw status verbose` prints `Default: deny (incoming), allow (outgoing)`
+and is now required in every firewall capture on both hosts.

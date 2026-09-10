@@ -1,0 +1,127 @@
+Step 1 — primary host `tg` (10.0.0.173)
+Captured at the physical keyboard by the operator. Verbatim terminal output.
+
+================================================================================
+BEFORE — 2026-09-10 03:35:08 UTC
+================================================================================
+
+Thu Sep 10 03:35:08 AM UTC 2026
+[sudo] password for tomigj:
+Status: inactive
+
+  (ufw was inactive before this step, so there was no prior ruleset to preserve
+  or report.)
+
+================================================================================
+FIREWALL AND DIRECTORY STEPS — no errors
+================================================================================
+
+Default incoming policy changed to 'deny'
+(be sure to update your rules accordingly)
+Default outgoing policy changed to 'allow'
+(be sure to update your rules accordingly)
+Rules updated
+Firewall is active and enabled on system startup
+
+================================================================================
+FAILURE AT 03:35 — recorded as it occurred
+================================================================================
+
+Failed to enable unit: Unit file ssh.service does not exist.
+
+  openssh-server was not installed on this host at that time:
+
+    $ dpkg -l openssh-server
+    un  openssh-server <none> <none> (no description available)
+
+    $ ls -l /usr/sbin/sshd
+    /usr/sbin/sshd does not exist
+
+  The operator installed openssh-server, and the capture below is the state
+  after that. This failure is retained rather than removed: it is what happened.
+
+================================================================================
+AFTER — 2026-09-10 03:35:14 UTC
+================================================================================
+
+Thu Sep 10 03:35:14 AM UTC 2026
+
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    10.0.0.212                 # verifier pull from ledger
+
+inactive
+
+drwxr-x--- 2 tomigj integrity 4096 Sep  9 23:35 /var/lib/integrity
+drwxr-x--- 2 tomigj integrity 4096 Sep  9 23:35 /var/log/integrity
+
+  (Directory timestamps read 23:35 local, UTC-4, consistent with 03:35 UTC.)
+
+================================================================================
+FINAL STATE — 2026-09-10 03:37:59 UTC, after installing openssh-server
+================================================================================
+
+Thu Sep 10 03:37:59 AM UTC 2026
+inactive
+LISTEN 0      4096         0.0.0.0:22        0.0.0.0:*
+LISTEN 0      4096            [::]:22           [::]:*
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    10.0.0.212                 # verifier pull from ledger
+
+================================================================================
+READING THE WORD "inactive" ABOVE — REQUIRED CONTEXT
+================================================================================
+
+`systemctl is-active ssh` reports `inactive` on this host while SSH is fully
+functional and port 22 is listening. That is not a failed step. Ubuntu 24.04
+ships SSH socket-activated:
+
+    $ systemctl list-unit-files | grep -iE '^(ssh|sshd)'
+    ssh.service                                    disabled        enabled
+    ssh.socket                                     enabled         enabled
+
+    $ systemctl is-active ssh.socket ; systemctl is-enabled ssh.socket
+    active
+    enabled
+
+    $ systemctl is-active ssh.service ; systemctl is-enabled ssh.service
+    inactive
+    disabled
+
+    $ dpkg -l openssh-server | tail -1
+    ii  openssh-server 1:9.6p1-3ubuntu13.19 amd64  secure shell (SSH) server, ...
+
+`ssh.socket` holds the listener; `ssh.service` is spawned per connection and is
+correctly inactive when nothing is connected. The socket is what is enabled and
+what comes up at boot.
+
+`ssh.service` being `disabled` is likewise correct and must not be "fixed".
+Enabling it would conflict with the socket, disable socket activation, and move
+this host off the distribution default -- changing a configuration that is
+itself evidence, for a cosmetic status line.
+
+================================================================================
+IPv6
+================================================================================
+
+The listener above covers [::]:22 and this host has four globally routable IPv6
+addresses with a default v6 route. The allow rule is IPv4-only, so inbound v6
+SSH is denied -- but by the DEFAULT POLICY, which `ufw status numbered` does not
+print. `ufw status verbose` prints it explicitly and is required in the capture
+protocol for this reason.
+
+================================================================================
+STATUS
+================================================================================
+
+Step 1 complete on `tg`: ufw active with exactly one inbound rule scoped to the
+ledger, both directories drwxr-x--- tomigj:integrity, openssh-server installed
+and listening via socket activation.
+
+Not yet captured: `ufw status verbose` showing default policies, and a
+functional connectivity test from the ledger. Both outstanding.
