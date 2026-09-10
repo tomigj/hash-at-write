@@ -51,6 +51,27 @@ def utc_now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
+def fmt_ts(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def human(seconds):
+    """Render a duration at a sensible scale.
+
+    Rendering everything in days prints a seven-minute skew as "0.0 days",
+    which next to "2444.1 days" on the following line reads as a broken
+    formatter and invites a reader to distrust every number on the page.
+    """
+    seconds = abs(seconds)
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    if seconds < 3600:
+        return f"{seconds / 60:.1f} minutes"
+    if seconds < 86400:
+        return f"{seconds / 3600:.1f} hours"
+    return f"{seconds / 86400:.1f} days"
+
+
 def parse_ts(value):
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
 
@@ -137,6 +158,12 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
     # --- ledger-driven: deletion and tamper --------------------------------
     computed = GENESIS
     chain_broken_at = None
+    # The last receipt whose own record arrived promptly -- i.e. the last
+    # moment this ledger is known to have been reachable AND current. Entries
+    # in a recovery batch all arrive within milliseconds of each other, so the
+    # immediately preceding entry is useless as a reference point: it is a
+    # batch-mate, not evidence of liveness at the time the record was written.
+    last_healthy_received = None
     for entry in chain:
         seq, digest = int(entry["seq"]), entry["digest"]
 
@@ -174,16 +201,54 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
             else:
                 skew = (received - claimed).total_seconds()
                 if skew > max_skew:
-                    alerts.append(Alert("BACKDATED", seq,
-                        f"record claims {record['ts']} but its digest reached the "
-                        f"ledger at {entry['received']} -- {skew / 86400:.1f} days later "
-                        f"(threshold {max_skew:.0f}s)"))
+                    # Lateness alone does not imply forgery. A digest spooled
+                    # while this host was unreachable arrives late for an
+                    # entirely legitimate reason, and the ledger's own receipt
+                    # times say when that was: if the record claims to have been
+                    # written AFTER the last digest this ledger successfully
+                    # received, the ledger may well have been down since then
+                    # and the delay is explained.
+                    #
+                    # A record claiming to predate a moment when the ledger was
+                    # demonstrably receiving normally has no such explanation.
+                    # That is the suspicious one, and separating the two is what
+                    # keeps a real outage from being reported in the same terms
+                    # as a forgery -- which would reintroduce, in the alerting,
+                    # exactly the ambiguity this project exists to remove.
+                    if last_healthy_received is None:
+                        # Nothing in the chain predates this, so there is no
+                        # evidence either way. Say that, rather than picking a
+                        # side: from ledger data alone an outage before the
+                        # chain began and a backdated record are identical.
+                        alerts.append(Alert("OUTAGE RECOVERY", seq,
+                            f"digest arrived {human(skew)} after the record claims "
+                            f"to have been written, and no earlier prompt receipt "
+                            f"exists to establish whether this ledger was reachable "
+                            f"at that time -- cannot be distinguished from "
+                            f"backdating from ledger data alone"))
+                    elif claimed >= last_healthy_received:
+                        alerts.append(Alert("OUTAGE RECOVERY", seq,
+                            f"digest arrived {human(skew)} after the record was "
+                            f"written, but the record postdates this ledger's last "
+                            f"prompt receipt at {fmt_ts(last_healthy_received)} -- "
+                            f"consistent with a digest spooled during an outage"))
+                    else:
+                        alerts.append(Alert("BACKDATED", seq,
+                            f"record claims {record['ts']} but its digest reached "
+                            f"the ledger at {entry['received']} -- {human(skew)} "
+                            f"later, and the ledger was receiving normally at the "
+                            f"claimed time (threshold {max_skew:.0f}s)"))
+                    # deliberately does not update last_healthy_received
                 elif -skew > CLOCK_TOLERANCE:
                     # A record cannot legitimately be written after its own
                     # digest was received.
                     alerts.append(Alert("FUTURE DATED", seq,
-                        f"record claims {record['ts']}, which is {-skew:.0f}s AFTER "
-                        f"its digest was received at {entry['received']}"))
+                        f"record claims {record['ts']}, which is {human(-skew)} "
+                        f"AFTER its digest was received at {entry['received']}"))
+                else:
+                    # Arrived promptly: this receipt is evidence the ledger was
+                    # reachable and current at the moment the record was written.
+                    last_healthy_received = received
 
         # --- chain recomputation from genesis ------------------------------
         computed = next_chain_hash(digest, computed)
@@ -192,6 +257,8 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
             alerts.append(Alert("CHAIN BREAK", seq,
                                 f"stored {str(entry.get('chain_hash'))[:16]}... != recomputed {computed[:16]}..."))
             computed = entry.get("chain_hash", computed)
+
+
 
     # --- log-driven: unwitnessed records -----------------------------------
     # The check the original spec's loop cannot make, because it only ever
@@ -230,7 +297,7 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
                     continue
                 if gap > max_silence:
                     alerts.append(Alert("SILENCE", f"{prev['seq']}->{curr['seq']}",
-                                        f"{gap:.0f}s with no digests received "
+                                        f"{human(gap)} with no digests received "
                                         f"(threshold {max_silence}s)"))
 
             # The open interval: the agent stopped and STAYED stopped, so the
@@ -243,8 +310,8 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
                             - parse_ts(chain[-1]["received"])).total_seconds()
                 if open_gap > max_silence:
                     alerts.append(Alert("SILENCE", f"{chain[-1]['seq']}->now",
-                                        f"{open_gap:.0f}s since the last digest was "
-                                        f"received; the agent may be stopped "
+                                        f"{human(open_gap)} since the last digest "
+                                        f"was received; the agent may be stopped "
                                         f"(threshold {max_silence}s)"))
             except (KeyError, ValueError, IndexError):
                 pass
