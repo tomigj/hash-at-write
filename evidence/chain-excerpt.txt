@@ -1,0 +1,80 @@
+Ledger chain excerpt — showing linkage
+
+Ten consecutive entries from the production chain on the ledger host, with the
+linkage made explicit. Full chain at /var/lib/ledger/chain.jsonl on `daddy`,
+carrying chattr +a since before its first byte.
+
+Each entry's prev_chain is the previous entry's chain_hash. That is what makes
+altering or removing any entry invalidate every entry after it: concealing a
+single change requires recomputing the whole tail, on a host the primary cannot
+write to.
+
+Entries 21 to 30 of 109:
+
+  seq   21  received 2026-09-10T05:05:16.211Z
+           digest      30eea6c772ed3f97a798919328f38a1232e954ee433d1261d95a78af31378074
+           prev_chain  2e1fc312b691c780bb29a11d1ac554870a0a86c31632fa9661474bf44c18cca3
+           chain_hash  f2adf6894ef91e3208c74d1345c234ca79d79e87f4368543c66294400a42a4f3
+
+  seq   22  received 2026-09-10T05:05:16.228Z
+           digest      ffbe0ec07cf4277136d75a1f39c58fcad57da2cabf22bf370ae84fbe4311dc34
+           prev_chain  f2adf6894ef91e3208c74d1345c234ca79d79e87f4368543c66294400a42a4f3
+           chain_hash  fd5cad671f740ef410930b6db7a16a83d033c816b80779ce7ad9f11ea9214a6b
+
+  seq   23  received 2026-09-10T05:05:16.253Z
+           digest      028f4aae0b8fe5d58cc695a70d38e0516153581ebd7a89c06c0a595521d86452
+           prev_chain  fd5cad671f740ef410930b6db7a16a83d033c816b80779ce7ad9f11ea9214a6b
+           chain_hash  a8c22785ccdec9ddcbaa1e84b22cfe4ebddae9ba4a273d998ca002e0e5886f37
+
+  seq   24  received 2026-09-10T05:05:16.278Z
+           digest      e11bce7526ae741de2cdb048cddea1004492b5ad2e7ca4291f97cc202c53312a
+           prev_chain  a8c22785ccdec9ddcbaa1e84b22cfe4ebddae9ba4a273d998ca002e0e5886f37
+           chain_hash  acb143ba3142c3e926f7ea74ff60ffb22983d043dfd1aa8f9054fbaadd3991ac
+
+  seq   25  received 2026-09-10T05:05:16.297Z
+           digest      09ee03833ad618401d0ff2a35c102274d3ad570e46fa65b2a0dd1e630bb1d5a4
+           prev_chain  acb143ba3142c3e926f7ea74ff60ffb22983d043dfd1aa8f9054fbaadd3991ac
+           chain_hash  ecf6a9fce4e42b1d0a40f4e3156d21935a07e91062b911302d7ebab3415219f2
+
+  seq   26  received 2026-09-10T05:05:16.315Z
+           digest      980d61fd62a89522c6be66d9114f3c8201700c5865aac574b405162653e85fd0
+           prev_chain  ecf6a9fce4e42b1d0a40f4e3156d21935a07e91062b911302d7ebab3415219f2
+           chain_hash  4568491cc3a3bcad99c9de6bede81acbe45d7acb72520bcb3f73f4f9446d284d
+
+  seq   27  received 2026-09-10T05:05:16.334Z
+           digest      3682afefbb04ffad6c39ee222a32d77fff50801e953f254bbeae5e7e42a6cf8e
+           prev_chain  4568491cc3a3bcad99c9de6bede81acbe45d7acb72520bcb3f73f4f9446d284d
+           chain_hash  5bf05acb01fe2204bd222cdfe339e6c6d47105158a3935a6989681d1f9d7513b
+
+  seq   28  received 2026-09-10T05:05:16.347Z
+           digest      aca8fad10636e829a20e2c91d13fbeba60328d17c6628404140567ef4d8d2e68
+           prev_chain  5bf05acb01fe2204bd222cdfe339e6c6d47105158a3935a6989681d1f9d7513b
+           chain_hash  7544ec80b8fc0e6696a5a2ed1328d5b38412c7f65bbda3f07560fb919ab28c5e
+
+  seq   29  received 2026-09-10T05:05:16.382Z
+           digest      1bde232ba406f80e3ae65fcd515706743c2c8b6c67ea3e5778588aea46a29683
+           prev_chain  7544ec80b8fc0e6696a5a2ed1328d5b38412c7f65bbda3f07560fb919ab28c5e
+           chain_hash  dedaee07636e24e40513acc06532db04b948df18bc702b17530abfedb644b017
+
+  seq   30  received 2026-09-10T05:05:16.400Z
+           digest      53d1b9f3635749a1f31d6f6b39f9b95eac6de91b21e5ccad2f1301a9e465b5e0
+           prev_chain  dedaee07636e24e40513acc06532db04b948df18bc702b17530abfedb644b017
+           chain_hash  8bdeea7c6bab9930c9ffcadd2c6fdfc24d530581b841c39a403943d5b1c258a3
+
+Linkage check on this excerpt — each prev_chain equals the previous chain_hash:
+
+  seq   21 chain_hash  ->  seq   22 prev_chain   MATCH
+  seq   22 chain_hash  ->  seq   23 prev_chain   MATCH
+  seq   23 chain_hash  ->  seq   24 prev_chain   MATCH
+  seq   24 chain_hash  ->  seq   25 prev_chain   MATCH
+  seq   25 chain_hash  ->  seq   26 prev_chain   MATCH
+  seq   26 chain_hash  ->  seq   27 prev_chain   MATCH
+  seq   27 chain_hash  ->  seq   28 prev_chain   MATCH
+  seq   28 chain_hash  ->  seq   29 prev_chain   MATCH
+  seq   29 chain_hash  ->  seq   30 prev_chain   MATCH
+
+  all links intact
+
+Recomputation over the excerpt, chaining each digest onto the previous head:
+
+  10 entries recomputed, 0 mismatches

@@ -1,0 +1,508 @@
+Repository history
+
+Captured 2026-09-10 06:00:01 UTC from github.com/tomigj/witnessd
+
+Commits are the record of when the work happened. Nothing here is
+backdated, and where something was wrong the history contains both the
+error and its correction rather than only the corrected state.
+
+================================================================================
+SUMMARY
+================================================================================
+
+  commits:        55
+  first:          2026-09-10 03:26:28 +0200
+  latest:         2026-09-10 07:58:04 +0200
+  files tracked:  30
+  lines of code:  1937 across 8 Python files
+
+================================================================================
+COMMITS THAT RECORD A CORRECTION OR A DEFECT FOUND BY TESTING
+================================================================================
+
+  081860b  Record T1 and T4: volume, and real activity as the false-positive check
+  9f6b2ef  Add a live-stack attack suite, and correct what AUTH_MARKERS matches
+  2b69696  Record T3b, the mid-log excision, and correct the documented command
+  feaefbe  Correct the stale comment left by the Restart substitution
+  efda52a  Use Restart=always: on-failure defeated the loud attack, not the quiet one
+  6bf7408  Correct the overhead figures and drop date stamps from the headings
+  56c448d  Correct a false count in step 4 evidence, and the crash behind it
+  de00e68  Record that systemctl is-active was the wrong sshd check on both hosts
+  28817bc  Correct a verified claim that did not hold under its configuration
+  2628a75  Record the laundering finding and the walk's real cost
+  93bc9f7  Separate outage recovery from backdating, and fix duration rendering
+  74379d1  Record the three bugs, their reproductions and what they changed
+  91e1522  Move permanently refused digests to a dead-letter file
+  5f00553  Add ledger daemon with append-only chain and rewrite refusal
+
+================================================================================
+FULL HISTORY, NEWEST FIRST
+================================================================================
+
+936aa03  2026-09-10 07:58  Record the publication decision on key fingerprints and sudo lines
+081860b  2026-09-10 07:56  Record T1 and T4: volume, and real activity as the false-positive check
+9f6b2ef  2026-09-10 07:54  Add a live-stack attack suite, and correct what AUTH_MARKERS matches
+6e625c4  2026-09-10 07:51  Record that deliberate downtime is permanently visible, and the cost
+79efa7b  2026-09-10 07:42  Add the test protocol document with results as run
+2b69696  2026-09-10 07:37  Record T3b, the mid-log excision, and correct the documented command
+3c37abf  2026-09-10 07:35  Add two addenda to step 7 on the probe
+5c0ac04  2026-09-10 07:32  Record step 6: tamper and deletion against a live log
+feaefbe  2026-09-10 07:30  Correct the stale comment left by the Restart substitution
+efda52a  2026-09-10 07:29  Use Restart=always: on-failure defeated the loud attack, not the quiet one
+24b5d87  2026-09-10 07:26  Add systemd units, and separate the verifier's exit codes
+486dea2  2026-09-10 07:23  Record step 7: chain integrity and break detection
+c2faa6a  2026-09-10 07:07  Record step 5: clean-run comparison passes with zero alerts
+6bf7408  2026-09-10 06:52  Correct the overhead figures and drop date stamps from the headings
+56c448d  2026-09-10 06:49  Correct a false count in step 4 evidence, and the crash behind it
+df812e1  2026-09-10 06:49  Record step 4: the restricted key and the first end-to-end verification
+dde0ab8  2026-09-10 06:46  Record that the hash is 1.7% of overhead and the push is 80-95%
+6d8447b  2026-09-10 06:42  Close idle connections quietly, and raise the timeout above the beat
+fcb687d  2026-09-10 06:21  Record step 2: agent and emitter running on the primary
+b355981  2026-09-10 06:06  Record the primary-side capture of the reverse reachability test
+c232e4a  2026-09-10 06:03  Pseudonymise identifiers rather than blanking them
+6fb4d8e  2026-09-10 06:02  Record the claim 4 reverse test and its link-layer corroboration
+3b4804f  2026-09-10 05:56  Record step 1 evidence for the ledger host
+557ac45  2026-09-10 05:53  Record the IPv6 rule-scope test, run after the VPN was paused
+2a5bd06  2026-09-10 05:46  Record the ufw log with annotation, and the rule-scope test
+b702990  2026-09-10 05:43  Add evidence handling rules before the first log is captured
+020f758  2026-09-10 05:40  Add the primary's default-policy capture
+72ab2e9  2026-09-10 05:39  Record step 1 evidence for the primary host
+de00e68  2026-09-10 05:37  Record that systemctl is-active was the wrong sshd check on both hosts
+1c75080  2026-09-10 05:26  Enable heartbeats by default at 60s, silence threshold at 180s
+7e6b0a2  2026-09-10 05:03  Record reproduction notes for the fabrication result
+28817bc  2026-09-10 05:00  Correct a verified claim that did not hold under its configuration
+46970e2  2026-09-10 04:57  State that fabrication is out of scope, and why it always will be
+2628a75  2026-09-10 04:53  Record the laundering finding and the walk's real cost
+136db4a  2026-09-10 04:53  State the limitations testing has established
+d1b19d0  2026-09-10 04:53  Claim only what the ledger observed about a late digest
+270d63c  2026-09-10 04:48  Add regression suite for every reproduced failure mode
+93bc9f7  2026-09-10 04:47  Separate outage recovery from backdating, and fix duration rendering
+f54bd61  2026-09-10 04:47  Bound the gap between claimed sequence and digests actually chained
+0aed299  2026-09-10 04:39  Record the backdating and sequence-poisoning findings
+0be8838  2026-09-10 04:39  Warn at startup when heartbeats are disabled
+e92e954  2026-09-10 04:39  Compare each record's timestamp against the ledger's receipt time
+2246148  2026-09-10 04:39  Bound the submitted sequence number
+74379d1  2026-09-10 04:33  Record the three bugs, their reproductions and what they changed
+9acdfce  2026-09-10 04:33  Detect the open silence interval, not just gaps between entries
+91e1522  2026-09-10 04:33  Move permanently refused digests to a dead-letter file
+3863d16  2026-09-10 04:33  Distinguish retransmission from rewrite, and accept late digests
+3e9d1c2  2026-09-10 04:22  Exclude the internal build brief from the public repository
+af403f1  2026-09-10 04:22  Add build notes and gitignore
+c897732  2026-09-10 04:22  Add verifier with tamper, deletion, chain-break and unwitnessed detection
+5f00553  2026-09-10 04:22  Add ledger daemon with append-only chain and rewrite refusal
+f40485d  2026-09-10 04:22  Add hash-at-write agent and event emitter
+cff0e5e  2026-09-10 04:22  Add shared canonical serialisation and hashing
+3874598  2026-09-10 03:38  Add project README: hash-at-write design, threat model, and roadmap
+228d9db  2026-09-10 03:26  Initial commit
+
+================================================================================
+CHANGES PER COMMIT
+================================================================================
+
+
+936aa03 2026-09-10 07:58
+  Record the publication decision on key fingerprints and sudo lines
+
+
+ evidence/README.md | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+081860b 2026-09-10 07:56
+  Record T1 and T4: volume, and real activity as the false-positive check
+
+
+ evidence/step9-t1-t4-volume-and-real-activity.txt | 91 +++++++++++++++++++++++
+ tests/test_protocol.md                            |  8 +-
+ 2 files changed, 95 insertions(+), 4 deletions(-)
+
+9f6b2ef 2026-09-10 07:54
+  Add a live-stack attack suite, and correct what AUTH_MARKERS matches
+
+
+ agent/emitter.py          |  16 ++-
+ tests/run_attack_suite.py | 250 ++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 264 insertions(+), 2 deletions(-)
+
+6e625c4 2026-09-10 07:51
+  Record that deliberate downtime is permanently visible, and the cost
+
+
+ NOTES.md | 46 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+
+79efa7b 2026-09-10 07:42
+  Add the test protocol document with results as run
+
+
+ tests/test_protocol.md | 138 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 138 insertions(+)
+
+2b69696 2026-09-10 07:37
+  Record T3b, the mid-log excision, and correct the documented command
+
+
+ evidence/step6-tamper-deletion.txt | 79 ++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 75 insertions(+), 4 deletions(-)
+
+3c37abf 2026-09-10 07:35
+  Add two addenda to step 7 on the probe
+
+
+ evidence/step7-chain-integrity.txt | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+5c0ac04 2026-09-10 07:32
+  Record step 6: tamper and deletion against a live log
+
+
+ evidence/step6-tamper-deletion.txt | 161 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 161 insertions(+)
+
+feaefbe 2026-09-10 07:30
+  Correct the stale comment left by the Restart substitution
+
+
+ systemd/witnessd-agent.service | 33 +++++++++++++++++++++++++++------
+ 1 file changed, 27 insertions(+), 6 deletions(-)
+
+efda52a 2026-09-10 07:29
+  Use Restart=always: on-failure defeated the loud attack, not the quiet one
+
+
+ systemd/witnessd-agent.service   | 4 ++--
+ systemd/witnessd-ledgerd.service | 5 ++++-
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+24b5d87 2026-09-10 07:26
+  Add systemd units, and separate the verifier's exit codes
+
+
+ NOTES.md                          | 69 +++++++++++++++++++++++++++++++++++++++
+ ledger/verifier.py                | 16 ++++++++-
+ systemd/witnessd-agent.service    | 58 ++++++++++++++++++++++++++++++++
+ systemd/witnessd-ledgerd.service  | 43 ++++++++++++++++++++++++
+ systemd/witnessd-verifier.service | 39 ++++++++++++++++++++++
+ systemd/witnessd-verifier.timer   | 23 +++++++++++++
+ 6 files changed, 247 insertions(+), 1 deletion(-)
+
+486dea2 2026-09-10 07:23
+  Record step 7: chain integrity and break detection
+
+
+ evidence/step7-chain-integrity.txt | 135 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 135 insertions(+)
+
+c2faa6a 2026-09-10 07:07
+  Record step 5: clean-run comparison passes with zero alerts
+
+
+ evidence/step5-clean-run.txt | 119 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 119 insertions(+)
+
+6bf7408 2026-09-10 06:52
+  Correct the overhead figures and drop date stamps from the headings
+
+
+ NOTES.md | 91 +++++++++++++++++++++++++++++++++++++++++++++-------------------
+ 1 file changed, 64 insertions(+), 27 deletions(-)
+
+56c448d 2026-09-10 06:49
+  Correct a false count in step 4 evidence, and the crash behind it
+
+
+ evidence/step4-pull-path.txt | 27 +++++++++++++++++++++++++--
+ ledger/verifier.py           | 10 +++++++++-
+ 2 files changed, 34 insertions(+), 3 deletions(-)
+
+df812e1 2026-09-10 06:49
+  Record step 4: the restricted key and the first end-to-end verification
+
+
+ evidence/step4-pull-path.txt | 126 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 126 insertions(+)
+
+dde0ab8 2026-09-10 06:46
+  Record that the hash is 1.7% of overhead and the push is 80-95%
+
+
+ NOTES.md | 68 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 68 insertions(+)
+
+6d8447b 2026-09-10 06:42
+  Close idle connections quietly, and raise the timeout above the beat
+
+
+ evidence/step3-push-path.txt | 158 +++++++++++++++++++++++++++++++++++++++++++
+ ledger/ledgerd.py            |  24 ++++++-
+ 2 files changed, 181 insertions(+), 1 deletion(-)
+
+fcb687d 2026-09-10 06:21
+  Record step 2: agent and emitter running on the primary
+
+
+ NOTES.md                       |  55 ++++++++++++++++
+ evidence/step2-agent-local.txt | 146 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 201 insertions(+)
+
+b355981 2026-09-10 06:06
+  Record the primary-side capture of the reverse reachability test
+
+
+ evidence/step1-tg-reverse-test.txt | 161 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 161 insertions(+)
+
+c232e4a 2026-09-10 06:03
+  Pseudonymise identifiers rather than blanking them
+
+
+ evidence/README.md | 34 +++++++++++++++++++++++++++++++---
+ 1 file changed, 31 insertions(+), 3 deletions(-)
+
+6fb4d8e 2026-09-10 06:02
+  Record the claim 4 reverse test and its link-layer corroboration
+
+
+ evidence/step1-claim4-reverse-test.txt | 139 +++++++++++++++++++++++++++++++++
+ 1 file changed, 139 insertions(+)
+
+3b4804f 2026-09-10 05:56
+  Record step 1 evidence for the ledger host
+
+
+ evidence/step1-daddy.txt | 94 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 94 insertions(+)
+
+557ac45 2026-09-10 05:53
+  Record the IPv6 rule-scope test, run after the VPN was paused
+
+
+ evidence/README.md                   |  6 +++
+ evidence/step1-connectivity-test.txt | 76 ++++++++++++++++++++++++++++++------
+ 2 files changed, 70 insertions(+), 12 deletions(-)
+
+2a5bd06 2026-09-10 05:46
+  Record the ufw log with annotation, and the rule-scope test
+
+
+ evidence/step1-connectivity-test.txt | 53 ++++++++++++++++++++++++++++++++++++
+ evidence/step1-tg-ufw-log.txt        | 53 ++++++++++++++++++++++++++++++++++++
+ 2 files changed, 106 insertions(+)
+
+b702990 2026-09-10 05:43
+  Add evidence handling rules before the first log is captured
+
+
+ evidence/README.md | 51 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+
+020f758 2026-09-10 05:40
+  Add the primary's default-policy capture
+
+
+ evidence/step1-tg.txt | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+72ab2e9 2026-09-10 05:39
+  Record step 1 evidence for the primary host
+
+
+ NOTES.md              |  27 +++++++++++
+ evidence/step1-tg.txt | 127 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 154 insertions(+)
+
+de00e68 2026-09-10 05:37
+  Record that systemctl is-active was the wrong sshd check on both hosts
+
+
+ NOTES.md | 55 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 55 insertions(+)
+
+1c75080 2026-09-10 05:26
+  Enable heartbeats by default at 60s, silence threshold at 180s
+
+
+ agent/agent.py     | 7 +++++--
+ ledger/verifier.py | 8 ++++++--
+ 2 files changed, 11 insertions(+), 4 deletions(-)
+
+7e6b0a2 2026-09-10 05:03
+  Record reproduction notes for the fabrication result
+
+
+ NOTES.md | 30 ++++++++++++++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+28817bc 2026-09-10 05:00
+  Correct a verified claim that did not hold under its configuration
+
+
+ NOTES.md  | 47 ++++++++++++++++++++++++++++++++++++++++++++---
+ README.md | 13 ++++++++-----
+ 2 files changed, 52 insertions(+), 8 deletions(-)
+
+46970e2 2026-09-10 04:57
+  State that fabrication is out of scope, and why it always will be
+
+
+ NOTES.md  | 47 +++++++++++++++++++++++++++++++++++++++++++++++
+ README.md | 18 ++++++++++++++++++
+ 2 files changed, 65 insertions(+)
+
+2628a75 2026-09-10 04:53
+  Record the laundering finding and the walk's real cost
+
+
+ NOTES.md | 48 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+
+136db4a 2026-09-10 04:53
+  State the limitations testing has established
+
+
+ README.md | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+d1b19d0 2026-09-10 04:53
+  Claim only what the ledger observed about a late digest
+
+
+ ledger/verifier.py       | 50 +++++++++++++++++++++++++++++++++++++++---------
+ tests/repro_scenarios.py |  4 ++--
+ 2 files changed, 43 insertions(+), 11 deletions(-)
+
+270d63c 2026-09-10 04:48
+  Add regression suite for every reproduced failure mode
+
+
+ NOTES.md                   |  73 ++++++++++++++
+ tests/repro_dropped_ack.py |  57 +++++++++++
+ tests/repro_scenarios.py   | 230 +++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 360 insertions(+)
+
+93bc9f7 2026-09-10 04:47
+  Separate outage recovery from backdating, and fix duration rendering
+
+
+ ledger/verifier.py | 85 ++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 76 insertions(+), 9 deletions(-)
+
+f54bd61 2026-09-10 04:47
+  Bound the gap between claimed sequence and digests actually chained
+
+
+ ledger/ledgerd.py | 51 ++++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 38 insertions(+), 13 deletions(-)
+
+0aed299 2026-09-10 04:39
+  Record the backdating and sequence-poisoning findings
+
+
+ NOTES.md | 81 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 81 insertions(+)
+
+0be8838 2026-09-10 04:39
+  Warn at startup when heartbeats are disabled
+
+
+ agent/agent.py | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+e92e954 2026-09-10 04:39
+  Compare each record's timestamp against the ledger's receipt time
+
+
+ ledger/verifier.py | 55 +++++++++++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 52 insertions(+), 3 deletions(-)
+
+2246148 2026-09-10 04:39
+  Bound the submitted sequence number
+
+
+ ledger/ledgerd.py | 28 ++++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+74379d1 2026-09-10 04:33
+  Record the three bugs, their reproductions and what they changed
+
+
+ NOTES.md | 93 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 93 insertions(+)
+
+9acdfce 2026-09-10 04:33
+  Detect the open silence interval, not just gaps between entries
+
+
+ ledger/verifier.py | 55 ++++++++++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 45 insertions(+), 10 deletions(-)
+
+91e1522 2026-09-10 04:33
+  Move permanently refused digests to a dead-letter file
+
+
+ agent/agent.py | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+3863d16 2026-09-10 04:33
+  Distinguish retransmission from rewrite, and accept late digests
+
+
+ ledger/ledgerd.py | 55 +++++++++++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 45 insertions(+), 10 deletions(-)
+
+3e9d1c2 2026-09-10 04:22
+  Exclude the internal build brief from the public repository
+
+
+ .gitignore | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+af403f1 2026-09-10 04:22
+  Add build notes and gitignore
+
+
+ .gitignore |   2 +
+ NOTES.md   | 138 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 140 insertions(+)
+
+c897732 2026-09-10 04:22
+  Add verifier with tamper, deletion, chain-break and unwitnessed detection
+
+
+ ledger/verifier.py | 242 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 242 insertions(+)
+
+5f00553 2026-09-10 04:22
+  Add ledger daemon with append-only chain and rewrite refusal
+
+
+ ledger/ledgerd.py | 199 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 199 insertions(+)
+
+f40485d 2026-09-10 04:22
+  Add hash-at-write agent and event emitter
+
+
+ agent/agent.py   | 363 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ agent/emitter.py | 171 ++++++++++++++++++++++++++
+ 2 files changed, 534 insertions(+)
+
+cff0e5e 2026-09-10 04:22
+  Add shared canonical serialisation and hashing
+
+
+ common/canonical.py | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+3874598 2026-09-10 03:38
+  Add project README: hash-at-write design, threat model, and roadmap
+
+
+ README.md | 228 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 227 insertions(+), 1 deletion(-)
+
+228d9db 2026-09-10 03:26
+  Initial commit
+
+
+ README.md | 1 +
+ 1 file changed, 1 insertion(+)
