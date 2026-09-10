@@ -860,3 +860,49 @@ run should be made up rather than skipped.
 The primary has the repo at ~/witnessd, the ledger at ~/NIW. The unit files carry
 absolute paths and therefore differ per host. Noted in each unit rather than left
 for someone to discover from a failed start.
+
+## Deliberate downtime is permanently visible in the chain, and that is correct
+
+After restarting the agent, verification reports:
+
+    SILENCE  seq=58->59  37.9 minutes with no digests received (threshold 180s)
+
+That gap is the deliberate stop for T2, T3 and T3b — the agent was down from
+05:11:5x to 05:48:09 while the log was being edited. The receipt timestamps of
+seq 58 and seq 59 are in the chain, they are append-only, and the interval
+between them is therefore permanent. **Every future verification of this chain
+will report that gap.**
+
+This is a property, not a defect, and it is worth stating in the write-up because
+it cuts both ways.
+
+In its favour: downtime cannot be hidden. An attacker who stops the agent leaves
+a gap in the ledger's receipt timeline that no subsequent action on the primary
+can remove, because the primary cannot write to the chain. The record of the
+silence outlives the silence.
+
+Against it: a long-running deployment accumulates historical gaps that alert on
+every run forever. Every maintenance window, every reboot, every network outage
+becomes a permanent line in the verification output. That is alert fatigue by
+construction, and an operator who learns to skim past SILENCE lines has been
+trained by the system to ignore exactly the signal that catches the fabrication
+attack.
+
+The design does not currently address this. Options, none implemented:
+
+  - acknowledge a gap explicitly, recording the acknowledgement in the chain so
+    the annotation is itself witnessed rather than kept in an operator's notes
+  - report gaps only since a stated point, with the point recorded
+  - distinguish gaps that overlap a declared maintenance window, which requires
+    declaring them in advance and chaining the declaration
+
+All three amount to the same thing: an operator must be able to say "this gap is
+accounted for" in a way that is itself part of the evidence. Left unaddressed the
+system is correct and progressively less usable, which is a worse failure mode
+than being wrong, because it degrades quietly.
+
+Practical consequence for the test protocol: this chain cannot produce a CLEAN
+run at the default threshold again. T4, the false-positive check, must therefore
+be run at --max-silence 0 to isolate what it is actually testing, with the
+historical gap reported separately and labelled as the known consequence of the
+deliberate stop.
