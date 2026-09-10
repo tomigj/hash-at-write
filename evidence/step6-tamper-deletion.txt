@@ -112,10 +112,81 @@ truncated tail from a digest submitted for a record that never existed. We know
 it was truncation because we did it. The ledger does not, and the alert says so
 rather than asserting the stronger claim.
 
-A mid-log excision would produce an unambiguous DELETION with a real gap and no
-hedge. That test is outstanding and should be run so both cases sit side by side
-in the exhibit, with the reason they read differently stated -- rather than a
-reviewer noticing the hedge alone and wondering whether it indicates weakness.
+A mid-log excision produces an unambiguous DELETION with a real gap and no hedge.
+That test was run as T3b -- see below -- so both cases sit side by side.
+
+================================================================================
+T3b — MID-LOG EXCISION, THE UNHEDGED CASE
+================================================================================
+
+Restored to pristine first, confirmed at 48b6898f61084a80..., so this starts from
+a clean log rather than from the T3 truncated state.
+
+Target chosen by content again: seq 57, the successful publickey authentication.
+With seq 58 present after it, removing 57 leaves a real hole rather than a
+shortened tail.
+
+Executed by the assistant session on the primary at the operator's request rather
+than typed by the operator, unlike every prior mutation. Recorded because who
+performed each step is part of the record.
+
+    records: 57
+    digest mismatches: 0        every remaining record still hashes correctly
+    seq range: 1 - 58
+    missing sequences: [57]     a real hole, below the maximum
+    publickey login left? False
+
+The log runs 1-56, skips 57, resumes at 58. Every surviving record hashes
+correctly, so the file is internally consistent in the only sense the primary can
+check -- but unlike T3 the sequence break is visible on the primary itself,
+without reference to the ledger.
+
+Verification from the ledger, 05:37:17 UTC:
+
+    PASS 1  --max-silence 0
+      chain=58 log=57 heartbeats=6 -> ALERTS
+      DELETION seq=57  digest is chained but no record with this sequence exists
+                       in the log
+      exit 1
+
+    PASS 2  default threshold
+      DELETION seq=57  (as above)
+      SILENCE  seq=58->now  26.1 minutes
+      exit 1
+
+No ambiguity clause. Seq 57 is below the log's maximum of 58 and cannot be
+explained as a truncated tail, so the alert asserts deletion plainly.
+
+--- The pair, and why the wordings differ -------------------------------------
+
+    T3   removed the LAST record    log appears complete, ends at 57, no gap.
+                                    Nothing on the primary indicates loss.
+                                    DELETION 58, hedged: truncation or a digest
+                                    for a record that never existed.
+
+    T3b  removed a MIDDLE record    log has a visible hole at 57.
+                                    DELETION 57, unhedged.
+
+T3 is the harder case and the stronger statement of the thesis: an auditor with
+root, examining that file with every tool available, finds nothing wrong. T3b
+produces the cleaner alert.
+
+Both belong in the exhibit. The hedge in T3 is not weakness — it is the ledger
+declining to assert more than it can know — and T3b is the same mechanism
+speaking plainly when it can. Presenting only T3b would hide the limit;
+presenting only T3 would invite a reviewer to read the hedge as doubt.
+
+--- A methodological correction to the documented command ---------------------
+
+The command originally specified was `grep -v ... > /tmp/d.log` followed by `mv`.
+`mv` replaces the destination inode and carries the source file's mode with it,
+so the test can silently alter the permissions of the file it is testing -- and
+the verify account reads that file through its mode bits. A test that changes the
+access it depends on is a trap for whoever reproduces it.
+
+T3b instead redirected to a scratch file and used `cat scratch > events.log`,
+which preserves the original inode, owner and mode. Confirmed unchanged at
+-rw-rw-r-- tomigj:tomigj. The build spec has been amended to specify `cat`.
 
 ================================================================================
 RESTORE — THE TESTS ALTERED NOTHING PERMANENTLY
