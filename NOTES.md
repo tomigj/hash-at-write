@@ -458,9 +458,9 @@ record fabricated on the primary and witnessed at write time is byte-identical,
 in every property the system checks, to a genuine one. The attacker is not
 tampering with evidence at that point; they are producing it.
 
-Heartbeats bound the insertion window to roughly one beat interval, because a
-stop shorter than the interval trips nothing. They shrink it. They do not close
-it, and the user must not be told they do.
+Heartbeats shrink the insertion window but do not close it. See the correction
+below for what actually bounds it — the first version of this claim named the
+wrong parameter.
 
 The README's out-of-scope line covered *omission* ("if the application never
 emits an event, nothing here helps"). Omission and insertion are different
@@ -478,3 +478,44 @@ precise, defensible and still worth having.
 described as adding five bullets to the README. It added four — flat subnet,
 open port, linear-cost walk, and lateness without heartbeats. Recorded because
 the standard being held everywhere else applies to reports about the work too.
+
+---
+
+## 2026-09-10 — Correction: a "Verified" claim that did not hold
+
+The Known limitations bullet added for fabrication stated: "a fabricated SSH
+authentication with a truthful timestamp, inserted during an eight-second stop
+with heartbeats at two seconds, produced no alert of any kind."
+
+That result was real but the configuration was not stated, and under the
+configuration a reader would assume, it is false. The run used
+`--max-silence 60`. An eight-second stop is well below a sixty-second threshold,
+so nothing fired — that is a threshold set above the stop length, not a
+demonstration that the stop is undetectable. Caught by the `tg` session,
+rechecked here against the live stack:
+
+    heartbeats 2s, --max-silence 6, agent stopped 8s:
+      SILENCE seq=6->7  10s with no digests received (threshold 6.0s)   exit 1
+
+    heartbeats 2s, --max-silence 6, agent stopped 1s, fabrication inserted:
+      chain=8 log=8 heartbeats=4 -> CLEAN                               exit 0
+
+So the eight-second insertion IS detected at a workable threshold. The one that
+demonstrates the limitation is a stop shorter than the threshold.
+
+**The claim also named the wrong parameter.** The undetectable window is bounded
+by the *silence threshold*, not the heartbeat interval. The two are only loosely
+coupled: the threshold cannot go below the heartbeat interval plus normal jitter
+without false positives, so the interval sets a floor on how tight the threshold
+can be, and the threshold is what an attacker must fit inside. With beats at 2s,
+a 6s threshold is workable, so the window is about six seconds — not two.
+
+None of this weakens the finding. Fabrication is undetectable in principle, and
+a scripted insertion inside a few seconds is entirely practical. The threat-model
+paragraph was correct as written and is unchanged. It was one sentence, and it
+was the one sentence in that bullet a reviewer could falsify in a minute by
+rerunning it with a tuned threshold.
+
+Recorded rather than quietly edited, because a stated result that does not hold
+under the stated configuration is precisely the failure this project exists to
+make impossible. It should not appear in this project's own README.

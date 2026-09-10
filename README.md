@@ -225,11 +225,14 @@ Stated up front rather than discovered by whoever reads the code.
   digests per thousand sequences can still advance the head, and every one of those submissions
   raises an alert.
 - A record fabricated on the primary and witnessed through the normal path verifies clean, and
-  always will. The liveness heartbeat bounds the window in which an agent can be stopped to insert
-  one — roughly one beat interval — but it cannot close it, because a stop shorter than the
-  interval trips nothing. Verified: a fabricated SSH authentication with a truthful timestamp,
-  inserted during an eight-second stop with heartbeats at two seconds, produced no alert of any
-  kind.
+  always will. Stopping the agent to insert one does leave a gap in the ledger's receipt times, so
+  the insertion is detectable — but only when that gap exceeds the verifier's silence threshold,
+  and the threshold cannot be set below the heartbeat interval plus normal jitter without raising
+  false positives. The heartbeat interval therefore sets the floor on how tight the threshold can
+  be, and the threshold is the window an attacker has to fit inside. Verified against a running
+  agent and ledger with heartbeats at two seconds and a six-second threshold: an eight-second stop
+  was detected (SILENCE, 10s gap); a one-second stop, with a fabricated SSH authentication
+  carrying a truthful timestamp inserted into it, produced no alert.
 - Detecting that a digest arrived late is not the same as knowing why. From the ledger's position,
   "the ledger was unreachable" and "the primary chose not to speak" are the same observation, so a
   primary under full root can manufacture a quiet window and date a forged record into it. Running
