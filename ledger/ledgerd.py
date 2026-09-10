@@ -45,9 +45,10 @@ def utc_now():
 class Chain:
     """The digest chain. Append-only by protocol and, on disk, by chattr +a."""
 
-    def __init__(self, path, audit_path):
+    def __init__(self, path, audit_path, seq_window):
         self.path = path
         self.audit_path = audit_path
+        self.seq_window = seq_window
         self.lock = threading.Lock()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         os.makedirs(os.path.dirname(audit_path), exist_ok=True)
@@ -110,6 +111,24 @@ class Chain:
                 return False, "seq must be a positive integer"
             if len(digest) != 64 or not all(c in "0123456789abcdef" for c in digest):
                 return False, "digest must be 64 lowercase hex characters"
+
+            # The sequence number is chosen by the submitter and, before this
+            # check, was unbounded. A single packet claiming seq 999999 is
+            # accepted, pins the head there permanently, and thereafter every
+            # genuine digest arrives "out of order" and is mislabelled, while
+            # the absent record shows as a DELETION that never happened. The
+            # chain stays cryptographically correct and the alert stream
+            # becomes unusable -- one unauthenticated packet, no privileges
+            # beyond reaching the port.
+            #
+            # An empty chain accepts any starting point, so a ledger can be
+            # brought up against an agent that already has history.
+            if self.last_seq and seq > self.last_seq + self.seq_window:
+                self.audit("IMPLAUSIBLE_SEQ", {
+                    "seq": seq, "peer": peer, "chain_head_seq": self.last_seq,
+                    "window": self.seq_window})
+                return False, (f"seq {seq} is more than {self.seq_window} beyond "
+                               f"chain head {self.last_seq}")
 
             # What actually constitutes a rewrite is a DIFFERENT digest for a
             # sequence number already recorded. An identical digest for a
@@ -207,12 +226,17 @@ def main():
     p.add_argument("--port", type=int, default=9900)
     p.add_argument("--chain", default="/var/lib/ledger/chain.jsonl")
     p.add_argument("--audit", default="/var/lib/ledger/ledgerd-audit.jsonl")
+    p.add_argument("--seq-window", type=int, default=1000,
+                   help="refuse a sequence number more than this far beyond the "
+                        "current chain head. Bounds the damage an arbitrary seq "
+                        "can do to the alert stream; must exceed the deepest "
+                        "spool backlog you expect.")
     p.add_argument("--allow", action="append", default=[],
                    help="permitted source IP; repeatable. Empty means any "
                         "(rely on ufw alone).")
     args = p.parse_args()
 
-    chain = Chain(args.chain, args.audit)
+    chain = Chain(args.chain, args.audit, args.seq_window)
     srv = Server((args.bind, args.port), Handler)
     srv.chain = chain
     srv.allowed = set(args.allow)
