@@ -136,3 +136,96 @@ uses **the ledger's own receipt timestamps**, never the log's, because the log's
 timestamps are written by the primary and are attacker-controlled.
 
 Off by default (`--heartbeat-interval 0`) pending a decision on the interval.
+
+---
+
+## 2026-09-10 — Three bugs in the first implementation, all found by testing
+
+Two reported by the session on `tg` after reading the pushed code, both with
+working reproductions. A third found while confirming them. All three were
+reproduced here before any fix was written.
+
+### 1. Silence detection was blind to the case that matters
+
+`verifier.py` measured gaps only *between* consecutive chain entries
+(`zip(chain, chain[1:])`). Nothing compared the last entry against the present
+moment, so a chain that simply **ends** — agent killed and left dead — passed:
+
+    chain=10 log=10 heartbeats=10 -> CLEAN     (agent dead for one hour)
+
+The same gap placed in the interior alerted correctly. So the check only caught
+an attacker who politely restarted the agent afterwards, and missed the one who
+killed it and walked away. That is backwards from the risk ordering, and it
+meant the heartbeat did not close the hole the previous note claimed it closed.
+
+Fixed by also checking the open interval against now, and by treating an empty
+chain as SILENCE rather than as a clean run over zero entries.
+
+### 2. One dropped acknowledgement manufactured the signature of an attack
+
+`_push_once` sends a digest and then blocks reading the acknowledgement. If the
+ack was lost *after* the ledger committed — ordinary packet loss, and both hosts
+are on wifi — the agent retried, and `ledgerd` refused on `seq <= last_seq` and
+audited REFUSED_REWRITE. The agent then spooled the digest and `drain_spool`
+retried it every interval **forever**, being refused every time: roughly 8,600
+REFUSED_REWRITE entries per day from a single lost packet, each one reading as
+"the primary is attempting to rewrite the chain."
+
+The evidence was never affected — verification reported CLEAN throughout. Only
+the alerting was poisoned, which is worse in a specific way: the failure is
+invisible to the check most likely to be run, and loud in the record a reader
+would treat as the intrusion log.
+
+Fixed by distinguishing the two cases, which the chain previously could not do
+at all. A rewrite is a *different* digest for a recorded sequence. An identical
+digest for a recorded sequence is a retransmission, gains an attacker nothing
+because the chain is unchanged, and is now acknowledged without appending. Only
+a differing digest raises REFUSED_REWRITE. The audit log can now tell a lost
+packet from an attack; before, it could not.
+
+### 3. The spool could never be recovered
+
+Found while reproducing the above. `seq <= self.last_seq` refused *any* sequence
+at or below the head — including one that had **never been chained**. But that
+is exactly what a legitimate spool recovery looks like: the ledger was briefly
+unreachable, seq 2 was spooled, seq 3 got through, and seq 2 arrives afterwards.
+Refused permanently, and audited as an attempted rewrite:
+
+    seq 2 -> {"error":"seq 2 is at or below chain head 3","ok":false}
+
+So the spool-and-retry mechanism, which exists precisely so that digests are
+never silently dropped, could not deliver anything once a later sequence had
+been chained. The design contradicted itself.
+
+Fixed: a sequence never chained is accepted regardless of order, because the
+chain binds arrival order and the sequence number is only a label. Such entries
+are marked `out_of_order` with the head at receipt, `ledgerd` audits
+LATE_DIGEST, and the verifier raises it as an alert.
+
+**This is deliberately not silent, and the reason should be stated in the
+write-up.** A legitimate late arrival after an outage and a malicious backfill
+of a previously unwitnessed record are indistinguishable at the chain: both are
+a digest for a sequence the ledger never saw. What separates them is *when the
+digest arrived*, which the ledger records and the primary cannot forge. Accepting
+them silently would let an attacker convert an UNWITNESSED alert into a clean
+verification; refusing them would break outage recovery. Accepting and marking
+them keeps both properties and puts the judgement where the evidence is.
+
+### Also changed
+
+A refusal is now marked `permanent` in the response, and the agent moves such
+digests to a dead-letter file instead of retrying them forever. Without this,
+even a genuine rewrite refusal would have produced the same unbounded audit
+spam as bug 2.
+
+### Noted, not yet acted on
+
+- `handle_event` holds the lock across the ledger push, so with the ledger
+  unreachable the write path blocks for up to ~8.75s per event and events
+  serialise behind it. The T6 overhead figure will therefore be sharply bimodal
+  depending on ledger reachability. The measurement must either pin ledger state
+  or report both modes; a single mean would be misleading.
+- `digest_before_write_us` is positive by construction. It is honest
+  instrumentation of this binary's ordering, but it is not independent proof of
+  claim 1, and presenting it as proof would be circular. The write-up should
+  present it as a timing measurement and rest claim 1 on the code path itself.
