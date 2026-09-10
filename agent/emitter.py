@@ -23,8 +23,20 @@ import socket
 import sys
 import time
 
-# Lines worth treating as auditable authentication events. Deliberately narrow:
-# forwarding all of auth.log would bury the SSH logins that T4 depends on.
+# Lines worth treating as auditable authentication events.
+#
+# This is NOT SSH-only, and describing it that way would misstate what gets
+# captured. "session opened for user" and "session closed for user" are PAM
+# messages, so they match sudo, cron and systemd-user sessions as well as sshd.
+# In practice a single SSH connection produces five matching lines: the
+# accepted-publickey line, the sshd session opening and closing, and the
+# systemd-user session opening and closing.
+#
+# The breadth is kept deliberately. An audit trail that recorded only SSH would
+# miss privilege escalation via sudo and anything scheduled through cron, and
+# those are exactly the events an investigation cares about. But the write-up
+# must describe the captured set as authentication and session events, of which
+# SSH is a subset -- not as "SSH logins".
 AUTH_MARKERS = (
     "Accepted password",
     "Accepted publickey",
