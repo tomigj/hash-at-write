@@ -310,3 +310,76 @@ running.
 Heartbeats remain off by default pending a decision on the interval, but the
 agent now warns loudly at startup when they are disabled and says what is
 exposed. A default that quietly leaves this open would be a trap.
+
+---
+
+## 2026-09-10 — Two more, and a fix that was wrong the first time
+
+### 6. The sequence window was walkable
+
+`--seq-window` bounded the size of a single jump, not where the head ended up.
+Five submissions 999 apart, one round trip each, walked it from 1 to 4996 with
+zero refusals — after which every genuine digest below the head was mislabelled
+LATE DIGEST, which for a low-volume audit trail means months. The previous fix
+had converted unbounded poisoning into bounded poisoning that could be trivially
+re-applied. Not a closure.
+
+Fixed by bounding the gap between the sequence claimed and the number of digests
+actually chained, since that gap *is* the count of sequences this ledger has
+never seen. A walk inflates it every step and is refused on the second.
+
+One consequence worth recording, not raised in review: these refusals must be
+**retryable**, not permanent. After a long outage a genuine new event can
+legitimately arrive far ahead of a spool that has not drained. Marking the
+refusal permanent would have sent a real digest to the dead-letter file and lost
+evidence — the fix for one problem quietly creating a worse one.
+
+### 7. A legitimate outage was reported as forgery
+
+An outage longer than `--max-skew` raised BACKDATED on every recovered record.
+Ten alerts, identical in kind to a forgery, produced by a laptop suspending or
+wifi dropping. An operator could separate them only by squinting at magnitudes,
+which reintroduces in the alerting layer exactly the ambiguity this project
+exists to remove.
+
+The discriminator was already on the trustworthy host. A digest spooled while
+the ledger was unreachable is late for a legitimate reason; a record claiming to
+predate a moment when the ledger was demonstrably receiving normally is not.
+
+**The first attempt at this fix was wrong**, and the way it was wrong is worth
+keeping. Comparing each record against the *immediately preceding* chain entry
+looked correct and failed completely: entries in a recovery batch all arrive
+within milliseconds of each other, so the preceding entry is a batch-mate, not
+evidence of liveness at the time the record was written. Every recovered record
+still reported BACKDATED. The reference point has to be the last receipt that
+was itself prompt.
+
+Where no prompt receipt precedes the record, the alert now says so. From ledger
+data alone, an outage that began before the chain did and a backdated record are
+indistinguishable, and naming that is better than picking a side.
+
+### Presentation
+
+Durations rendered everywhere in days, so a seven-minute skew printed as
+"0.0 days" directly above "2444.1 days". That reads as a broken formatter and
+invites a reader to distrust every number on the page. Now scaled: seconds,
+minutes, hours, days.
+
+---
+
+## 2026-09-10 — Regression suite
+
+`tests/repro_scenarios.py` and `tests/repro_dropped_ack.py`, written by the
+session on `tg` during review and committed here. Six fixtures covering every
+failure mode found so far; the proxy reproduces the dropped-acknowledgement
+condition against a live ledger.
+
+The suite shells out to the verifier rather than importing it, deliberately: it
+exercises the entry point an operator actually runs, so a regression in argument
+handling or exit codes shows up too.
+
+Current state: 6/6 produce their expected alert.
+
+Seven reproduced failure modes with scripts is a materially stronger evidence
+package than the four scenarios the build spec originally called for, and every
+one of them was found by testing rather than by inspection.
