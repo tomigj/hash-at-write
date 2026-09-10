@@ -6,7 +6,7 @@
 # a directory nothing cleans up. systemd creates /run/integrity at start with
 # the ownership and mode below, and removes it at stop.
 #
-# Restart=on-failure has a consequence worth understanding rather than
+# Restart=always has a consequence worth understanding rather than
 # inheriting: it narrows the window in which a stopped agent can be used to
 # insert unwitnessed records. An attacker who kills the process gets it back
 # within RestartSec. To keep it down they must use `systemctl stop` or mask the
@@ -42,7 +42,7 @@ ExecStart=/usr/bin/python3 /home/tomigj/witnessd/agent/agent.py \
     --ledger-port 9900 \
     --heartbeat-interval 60
 
-Restart=on-failure
+Restart=always
 RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=10

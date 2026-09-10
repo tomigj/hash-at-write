@@ -28,7 +28,10 @@ ExecStart=/usr/bin/python3 /home/tomigj/NIW/ledger/ledgerd.py \
     --allow 10.0.0.173 \
     --idle-timeout 300
 
-Restart=on-failure
+# Restart=always for the same reason as the agent: ledgerd dies on SIGTERM with
+# exit 143, and systemd's on-failure excludes SIGTERM, so `kill` would have left
+# the ledger down until someone noticed.
+Restart=always
 RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=10
