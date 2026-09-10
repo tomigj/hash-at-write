@@ -200,6 +200,23 @@ Stated up front rather than discovered by whoever reads the code.
   ledger host — that requires anchoring the chain head somewhere the ledger cannot retroactively
   rewrite.
 - No integration with commercial SIEM platforms yet.
+- The two hosts in the current test environment share one flat subnet over wifi, behind a single
+  router, and are administered by the same person. The threat model assumes a separately
+  administered host on a different network segment; this environment does not instantiate that
+  assumption, and no claim of physical separation or an air gap is made.
+- The ledger accepts digest submissions from anything that can reach its port. Firewall rules are
+  the only control on that. A flood of submissions for records that do not exist is loudly
+  detectable — every one produces an alert — but it is not preventable at this layer, and it can
+  put a large number of alert lines into a verification run.
+- The bound on implausible sequence numbers raises the cost of walking the chain head forward from
+  constant to linear, rather than eliminating it. An attacker willing to submit roughly a thousand
+  digests per thousand sequences can still advance the head, and every one of those submissions
+  raises an alert.
+- Detecting that a digest arrived late is not the same as knowing why. From the ledger's position,
+  "the ledger was unreachable" and "the primary chose not to speak" are the same observation, so a
+  primary under full root can manufacture a quiet window and date a forged record into it. Running
+  the liveness heartbeat is what makes such a window visible as silence rather than accepted as an
+  outage; without it, lateness has no independent corroboration.
 
 ---
 
