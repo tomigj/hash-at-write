@@ -73,7 +73,7 @@ TEST 4  port forwarding: ssh -N -L 19999:127.0.0.1:22
 The verifier pulled the log over the restricted channel and recomputed
 everything locally against the chain:
 
-    chain=82  log=82  heartbeats=12
+    chain=83  log=83  heartbeats=13
 
 Exact parity between the digests the ledger holds and the records the primary
 serves. Alert breakdown:
@@ -85,7 +85,7 @@ serves. Alert breakdown:
     SILENCE       none
     BACKDATED     none
     LATE DIGEST   none
-    UNCORROBORATED  0   -- predicted in advance, see below
+    UNCORROBORATED  21  -- sequences 1-21, predicted in advance, see below
 
 --- The UNCORROBORATED alerts were stated before the run, not explained after
 
@@ -124,3 +124,26 @@ doctored content fails against digests that left the machine at write time --
 which means the property comes from where the digests are, not from this
 restriction. The build spec's claim that "the forced command is what makes claim
 4 real" is wrong and is corrected in the amended spec.
+
+================================================================================
+6. CORRECTION TO THIS FILE
+================================================================================
+
+As first committed, section 4 reported the UNCORROBORATED count as 0. That was
+wrong. The correct count is 21, sequences 1-21 -- exactly the set spooled during
+step 3's outage, which is what had been predicted.
+
+The zero came from generating the number with `--verify-log /dev/null`. The
+verifier fsyncs its outcome record, fsync on a character device raises
+EINVAL, and the run aborted before printing any alerts. The command that produced
+the figure returned nothing, and nothing counted as zero.
+
+Recorded rather than quietly amended, for the same reason every other correction
+in this project is: a stated result that does not hold under the configuration
+that produced it is the failure this system exists to make impossible. It should
+not appear in this system's own evidence, and when it does, the record should say
+so.
+
+The verifier now tolerates a non-regular --verify-log destination rather than
+aborting, since pointing it at /dev/null or a pipe is a reasonable thing to do
+when scripting a one-off check.

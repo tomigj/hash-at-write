@@ -380,7 +380,15 @@ def run_once(args):
     with open(args.verify_log, "a", encoding="utf-8") as f:
         f.write(json.dumps(outcome, sort_keys=True, separators=(",", ":")) + "\n")
         f.flush()
-        os.fsync(f.fileno())
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            # Not every destination is a regular file. Pointing --verify-log at
+            # /dev/null or a pipe is a reasonable thing to do when scripting a
+            # one-off check, and fsync on a character device raises EINVAL. The
+            # durability of the outcome record is not worth aborting the
+            # verification that produced it.
+            pass
 
     print(f"[{started}] chain={len(chain)} log={len(records)} "
           f"heartbeats={heartbeats} -> {outcome['result']}")
