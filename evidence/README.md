@@ -31,6 +31,12 @@ replaced with `MAC=[redacted]` in anything committed here.
 A stated redaction is entirely acceptable in evidence. An unnoticed disclosure
 is not.
 
+**Global IPv6 addresses are redacted too**, for the same reason. A routable v6
+address carries the ISP-delegated prefix for the operator's home network plus an
+interface identifier — a durable pointer to that network in a way a private
+address is not. Where a test turns on address family, the family, the port, the
+verdict and the timing are the evidence; the address is not.
+
 RFC 1918 addresses (`10.0.0.0/24`) are kept: they are not globally unique, they
 are necessary to read the rules, and they identify nothing outside the lab.
 

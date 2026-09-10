@@ -39,15 +39,67 @@ That is the other half of the rule and it is not tested here. The lab has two
 machines and the allow rule names one of them, so no third source address is
 available on the LAN.
 
-An IPv6 negative test was designed for this purpose -- tg's allow rule is
-IPv4-only while sshd listens on [::]:22, so a v6 connection from the same host
-would isolate the rule's address-family scope. It could not be run: `daddy` has
-no IPv6 address and no default v6 route on its LAN interface, because the VPN
-client in use disables IPv6 to prevent leaks. The attempt fails instantly with
-"Cannot assign requested address", which is the local stack refusing to source
-the packet -- not the remote firewall dropping it. Recorded here rather than run,
-because a test that fails for the wrong reason is worse than no test.
+================================================================================
+2026-09-10 03:51:50 UTC — IPv6 test, after pausing the VPN
+================================================================================
 
-Outstanding to complete the matrix: a third LAN host attempting port 22, or the
-IPv6 test run with the VPN disconnected. Either would close the source-address
-half of the rule.
+The first attempt at this test could not run. `daddy` had no IPv6 address and no
+default v6 route, because the VPN client in use disables IPv6 to prevent leaks;
+the attempt failed instantly with "Cannot assign requested address", which is the
+local stack refusing to source the packet rather than the remote firewall
+dropping it. The operator paused the VPN, IPv6 returned, and the test was run.
+
+Addresses are redacted -- see the note below.
+
+CONTROL   10.0.0.212 -> 10.0.0.173:22           OPEN after 0.11s
+          IPv4. The allow rule matches.
+
+TEST      [daddy v6] -> [tg v6 /128]:22         dropped, hung 20.04s to timeout
+          Same host, same daemon, same port, same moment. IPv6.
+          tg's allow rule is `from 10.0.0.212`, which is IPv4-only, so no rule
+          matches this connection and the default deny applies.
+
+CONTROL   ICMPv6 ping to the same v6 address    2 of 2 received, 0% loss
+          rtt min/avg/max/mdev = 36.240/76.291/116.342/40.051 ms
+
+2026-09-10 03:52:12 UTC — test ends
+
+The ICMPv6 control is what makes this conclusive. It establishes that the host is
+reachable at that exact IPv6 address at that moment, so the 20-second TCP hang
+cannot be a routing or reachability failure. The only thing that differs between
+a 0.11s connect and a 20s drop is which address family the packet arrived on --
+and therefore whether any allow rule matched it.
+
+Timing is the discriminator throughout: a local failure returns instantly, a
+remote DROP hangs to timeout. 0.11s, 20.04s.
+
+This closes the IPv6 question with a live result. Previously the claim that
+inbound v6 SSH is filtered rested on reading `Default: deny (incoming)` together
+with `IPV6=yes` in /etc/default/ufw -- correct, but asserted from configuration.
+It is now measured.
+
+================================================================================
+ADDRESS REDACTION
+================================================================================
+
+Global IPv6 addresses are redacted in this file and must be redacted in any ufw
+log captured for the window above. A globally routable IPv6 address contains the
+ISP-delegated prefix for the operator's home network and an interface
+identifier; published in a repository tied to a named individual it is a durable
+pointer to that network, in a way an RFC 1918 address is not. The evidentiary
+content here is the address family, the port, the verdict and the timing -- not
+the address itself.
+
+`tg`'s ufw log for 03:51:50-03:52:12 UTC will contain a [UFW BLOCK] line with
+SRC set to daddy's global v6 address and DPT=22. Redact the address when
+capturing it.
+
+================================================================================
+WHAT REMAINS UNTESTED
+================================================================================
+
+A DIFFERENT SOURCE ADDRESS attempting port 22 over IPv4. The lab has two
+machines and the allow rule names one of them, so no third IPv4 source exists on
+the LAN. A third device -- a phone on the same wifi -- attempting a TCP connect
+to 10.0.0.173:22 would close this, and would produce a [UFW BLOCK] line naming
+that device as the source.
