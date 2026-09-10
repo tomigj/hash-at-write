@@ -1,0 +1,139 @@
+Claim 4 — can the primary reach the evidence host?
+
+The primary attempting to reach the ledger. This is the direct test of the
+property the design rests on: the host that holds the logs must have no route to
+alter the evidence about them.
+
+Link-layer addresses and global IPv6 addresses are PSEUDONYMISED, not blanked --
+see evidence/README.md and the mapping at the end of this file. Blanking them
+would destroy evidentiary content: the MAC field is what distinguishes traffic
+relayed by the router from traffic sent directly on the LAN, and what proves the
+blocked packets came from the ledger host itself rather than something else
+using its address.
+
+================================================================================
+PROBES — run on `tg` (10.0.0.173, primary) against `daddy` (10.0.0.212, ledger)
+================================================================================
+
+Thu Sep 10 03:58:58 AM UTC 2026
+port 22 -> exit 124, elapsed 15012ms
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/10.0.0.212/9900: Connection refused
+port 9900 -> exit 1, elapsed 71ms
+Thu Sep 10 03:59:13 AM UTC 2026
+
+  port 22    15012ms, silent drop, timeout.  No rule matches; default deny.
+  port 9900     71ms, Connection refused.    Rule matches; nothing listening yet.
+
+A 211x difference in failure time, same source host, one command, 15 seconds
+apart.
+
+================================================================================
+WHY THIS PAIR IS SELF-VALIDATING
+================================================================================
+
+The obvious objection to the port 22 result is that the packet never arrived --
+the ledger was asleep, wifi dropped, routing broken. Any of those produce the
+same silent timeout as a firewall drop.
+
+The 9900 probe refutes that from the same shell seconds later. "Connection
+refused" means the SYN reached the ledger's kernel and the ledger sent an RST
+back. So at 03:59:13 the ledger was up, reachable from the primary, and its
+return path worked. The silent drop on port 22 therefore cannot be
+unreachability. It is policy.
+
+Neither probe needs the other host's cooperation to be conclusive. The negative
+result is validated by the positive one taken from the same place moments later.
+
+What 9900 proves affirmatively: the allow rule on the ledger matches. The packet
+was refused, not dropped. That is the write path open and empty, which is the
+correct state before ledgerd runs.
+
+================================================================================
+DIRECTION MATTERS — 9900 APPEARS IN TWO FILES WITH OPPOSITE VERDICTS
+================================================================================
+
+  tg -> daddy:9900     REFUSED (permitted, nothing listening)   this file
+  daddy -> tg:9900     DROPPED (no rule on tg)                  step1-connectivity-test.txt
+
+There is no contradiction. The write path is primary -> ledger. Nothing in the
+architecture ever connects ledger -> primary on 9900; those probes were negative
+controls for the primary's inbound policy, testing that its default deny works.
+
+Stated explicitly because a reader seeing "9900 blocked" in one file and "9900
+permitted" in another will assume an error unless the direction is given in both.
+
+================================================================================
+LINK-LAYER PROOF THAT THE v4 AND v6 ADDRESSES ARE ONE MACHINE
+================================================================================
+
+The IPv6 negative test in step1-connectivity-test.txt compares a permitted IPv4
+connection against a dropped IPv6 one and concludes the rule's address-family
+scope is what differs. That conclusion depends on both addresses belonging to the
+same host -- which, without evidence, a reviewer takes on trust.
+
+Neighbour tables from both hosts, taken independently, close it.
+
+On `tg` at Thu Sep 10 04:01:07 AM UTC 2026:
+
+    10.0.0.212        dev wlp59s0  lladdr <daddy-nic>  STALE
+    <daddy-v6>        dev wlp59s0  lladdr <daddy-nic>  STALE
+    <daddy-linklocal> dev wlp59s0  lladdr <daddy-nic>  STALE
+
+On `daddy` at Thu Sep 10 04:02:06 AM UTC 2026:
+
+    10.0.0.1        lladdr <router>   REACHABLE
+    10.0.0.173      lladdr <tg-nic>   STALE
+    <tg-v6>         lladdr <tg-nic>   STALE
+    <tg-linklocal>  lladdr <tg-nic>   STALE
+    <router-ll>     lladdr <router>   router REACHABLE
+
+Each host's IPv4 address, global IPv6 address and link-local address resolve to a
+single link-layer address, established from the other host's own neighbour table
+rather than asserted.
+
+This evidence is PERISHABLE. Neighbour entries were already STALE when captured
+and expire; it is not reproducible later without rerunning the test.
+
+================================================================================
+LOG COVERAGE IS SAMPLED, NOT COMPLETE
+================================================================================
+
+`ufw` on both hosts runs at LOGLEVEL=low, which rate-limits blocked-packet
+logging. The log is a sample.
+
+Concretely: probes from the ledger ran 03:45:18-03:45:34 UTC by the operator's
+own `date -u` stamps, while logged blocks for that window span 03:45:18-03:45:29.
+The missing five seconds is rate limiting, not a gap in enforcement.
+
+Two consequences for any write-up:
+
+  - Attempt counts must not be derived from log line counts. "Seven blocked SYNs
+    to 9900 were logged" is supportable. "Seven SYNs were blocked" is not.
+  - Absence of a log line is not evidence a packet was not blocked.
+
+`ufw logging medium` would give completeness for a specific test, at the cost of
+a configuration change mid-collection that then needs its own explanation. Not
+done; the sampled evidence is sufficient for what is claimed.
+
+================================================================================
+PSEUDONYM MAPPING
+================================================================================
+
+Consistent across all files in evidence/. Real values are not published: link-
+layer addresses are permanent globally unique device identifiers, and a routable
+IPv6 address carries the home network's ISP-delegated prefix. Neither is
+evidentiary. What matters is that the same pseudonym denotes the same device
+everywhere it appears.
+
+    <tg-nic>           primary host wifi NIC
+    <daddy-nic>        ledger host wifi NIC
+    <router>           home router
+    <tg-v6>            primary's stable global IPv6 /128
+    <daddy-v6>         ledger's global IPv6 address
+    <tg-linklocal>     primary's fe80:: address
+    <daddy-linklocal>  ledger's fe80:: address
+    <router-ll>        router's fe80:: address
+
+In ufw log lines the MAC field is `<dst-nic>:<src-nic>:<ethertype>`, and the
+ethertype is retained because it is evidentiary: 0800 is IPv4, 86dd is IPv6.
