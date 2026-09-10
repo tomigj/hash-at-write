@@ -133,3 +133,37 @@ and reordering with no content change.
 
 Not established: whether +a blocks hard links. Untested here for the reason
 given in section 2.
+
+================================================================================
+5. TWO ADDENDA ON THE PROBE
+================================================================================
+
+--- What the failed `mv` actually did -----------------------------------------
+
+The rename attempt targeted /tmp, which is tmpfs — a different filesystem. A
+cross-device `mv` is a copy followed by an unlink, and only the unlink was
+refused. So the copy at /tmp/probe-moved succeeded, and it does NOT carry the
+append-only attribute: chattr flags are properties of an inode and are not
+preserved by copying.
+
+That clarifies the scope of the protection, and it is worth being exact about.
+chattr +a prevents the original from being modified, renamed or deleted. It does
+not prevent the content being read and copied elsewhere. For a chain file that is
+harmless — the chain is not secret, and confidentiality of log contents is
+already out of scope in the threat model — but "the chain cannot be copied" is
+not among the things demonstrated here, and nothing should imply it is.
+
+--- The probe's later disappearance, which cannot be attributed ---------------
+
+The probe was created at 05:21 UTC and the observations in section 2 were taken
+at 05:22:19: rm refused, mv refused, file surviving both. Those are direct
+observations and they hold.
+
+The file was gone by the time cleanup was attempted, and the directory's mtime
+places its removal at roughly 05:24 UTC. What removed it cannot be established
+from the evidence available here. The likeliest explanation is that the intended
+cleanup — `chattr -a` followed by `rm` — ran successfully in an earlier terminal
+paste. That is inference, not fact, and is recorded as inference.
+
+It does not affect section 2's conclusions, which rest on refusals observed
+directly while the attribute was in place and confirmed by the file surviving.
