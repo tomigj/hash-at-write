@@ -229,3 +229,84 @@ spam as bug 2.
   instrumentation of this binary's ordering, but it is not independent proof of
   claim 1, and presenting it as proof would be circular. The write-up should
   present it as a timing measurement and rest claim 1 on the code path itself.
+
+---
+
+## 2026-09-10 — Two more holes, both reproduced
+
+Found by the `tg` session reviewing the fixes above, reproduced here before
+being fixed. One of them was made materially worse by the bug 3 fix.
+
+### 4. A record's own timestamp was never checked against the ledger's receipt
+
+The log says when a record claims to have happened. The chain says when its
+digest arrived. The first is written by the primary and is attacker-controlled;
+the second is not. Both files are read on the same verification pass and nothing
+compared them.
+
+So a record forged at the next sequence and witnessed normally — genuine digest,
+intact chain, in-order sequence — passed every check while claiming a date six
+years in the past:
+
+    record claims:   2020-01-01T00:00:00.000Z
+    ledger received: 2026-09-10T02:37:21.296Z
+    verifier:        CLEAN (exit 0)
+
+This matters for what an audit trail is for. "Was this record altered" is half
+the question; "when did this happen" is the other half, and a
+reconstructible-but-backdated timeline is the failure mode the retention rules
+in NYDFS 500.06 exist to prevent.
+
+Fixed by comparing the two on every chained entry. Backdating beyond
+`--max-skew` raises BACKDATED; a record claiming to be written *after* its own
+digest was received raises FUTURE DATED, allowing 60s for clock drift between
+the hosts. Legitimate skew is bounded by push latency, or by a whole outage if
+the digest was spooled — which is why the threshold is configurable and why
+recovery after a long outage should be visible when it happens rather than
+suppressed.
+
+### 5. One packet with an arbitrary sequence number poisoned the alert stream
+
+`seq` is chosen by the submitter and was unbounded. A single submission:
+
+    {"seq": 999999, "digest": ...}   ->   {"ok": true, "seq": 999999}
+
+pinned the chain head at 999999 permanently. The result was a false DELETION for
+a record that never existed, and **every genuine digest thereafter flagged LATE
+DIGEST**, because everything now arrived below the head:
+
+    DELETION     seq=999999
+    LATE DIGEST  seq=5    digest arrived after the chain had reached seq 999999
+    LATE DIGEST  seq=6    digest arrived after the chain had reached seq 999999
+
+One unauthenticated packet, no privilege beyond reaching the port, and the
+verifier never returns a clean run again.
+
+The vector pre-existed — high sequences were always accepted — but before the
+bug 3 fix the follow-on digests were refused outright, which was a different and
+noisier failure. After it they are chained correctly and every one is
+mislabelled. This is the same shape as bug 2 one layer up: the evidence stays
+intact and the thing a human reads becomes unusable. A system whose alert stream
+can be permanently poisoned by one packet does not produce usable evidence, even
+though the cryptography is untouched.
+
+Fixed at the ledger, which is the host that is supposed to be trustworthy: a
+sequence more than `--seq-window` (default 1000) beyond the current head is
+refused and audited as IMPLAUSIBLE_SEQ. An empty chain still accepts any
+starting point, so a ledger can be brought up against an agent that already has
+history. The verifier additionally says, when a chained sequence exceeds the
+log's maximum, that the case is ambiguous between a truncated tail and a digest
+for a record that never existed, rather than asserting the stronger claim.
+
+### The heartbeat decision is load-bearing, not cosmetic
+
+The residual after both fixes: stop the agent, append a record at the *next*
+sequence, witness it normally with a plausible timestamp, restart. The digest is
+genuine, the chain is intact, the sequence is in order, and the timestamp is
+credible. Nothing catches it except the receipt gap while the agent was stopped
+— which only silence detection reads, and which only exists if heartbeats are
+running.
+
+Heartbeats remain off by default pending a decision on the interval, but the
+agent now warns loudly at startup when they are disabled and says what is
+exposed. A default that quietly leaves this open would be a trap.
