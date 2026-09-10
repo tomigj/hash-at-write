@@ -151,7 +151,7 @@ def legitimate_outage_recovery(outdir):
     returns, the drainer pushes every held digest at once. Nothing here is an
     attack: every record is genuine and every digest is correct.
 
-    Expect OUTAGE RECOVERY, not BACKDATED. The five prompt receipts before the
+    Expect UNCORROBORATED, not BACKDATED. The five prompt receipts before the
     outage are what make the distinction possible: the recovered records all
     postdate the ledger's last prompt receipt, which is consistent with a spool
     delivered late and inconsistent with backdating.
@@ -169,7 +169,7 @@ def legitimate_outage_recovery(outdir):
         recs.append({"seq": seq, "ts": fmt(t), "event": f"real event {seq}"})
         recv[seq] = fmt(r)
     log, chain = write_pair(outdir, "legitimate_outage_recovery", recs, recv)
-    return log, chain, [], ["OUTAGE RECOVERY"]
+    return log, chain, [], ["UNCORROBORATED"]
 
 
 def unwitnessed_tail(outdir):

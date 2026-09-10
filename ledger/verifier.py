@@ -164,6 +164,22 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
     # immediately preceding entry is useless as a reference point: it is a
     # batch-mate, not evidence of liveness at the time the record was written.
     last_healthy_received = None
+
+    # Receipt gaps large enough to be reported as SILENCE, computed before the
+    # main loop so that the skew check can say whether the quiet window it is
+    # about to accept as an explanation is itself already flagged. The two facts
+    # are in the same pass; leaving a reader to connect them across two
+    # unrelated-looking lines is how a laundered forgery gets read as an outage.
+    silence_intervals = []
+    if max_silence:
+        for a, b in zip(chain, chain[1:]):
+            try:
+                ta, tb = parse_ts(a["received"]), parse_ts(b["received"])
+            except (KeyError, ValueError):
+                continue
+            if (tb - ta).total_seconds() > max_silence:
+                silence_intervals.append((ta, tb))
+
     for entry in chain:
         seq, digest = int(entry["seq"]), entry["digest"]
 
@@ -215,23 +231,39 @@ def verify(chain, records, duplicates, malformed, max_silence, max_skew):
                     # keeps a real outage from being reported in the same terms
                     # as a forgery -- which would reintroduce, in the alerting,
                     # exactly the ambiguity this project exists to remove.
+                    # The ledger cannot tell "I was unreachable" from "the
+                    # primary chose not to speak" -- from its seat those are the
+                    # same observation. Under full root the primary can go quiet
+                    # deliberately, manufacturing a window, and then backdate a
+                    # forged record into it to earn this softer label. So the
+                    # wording below claims only what was observed, never that an
+                    # outage occurred, and it points at the corroborating
+                    # SILENCE alert when one exists.
+                    in_flagged_gap = any(a <= claimed <= b for a, b in silence_intervals)
+                    corroboration = (
+                        " -- and that quiet window is itself reported as SILENCE "
+                        "below, so the explanation rests on the primary's own "
+                        "absence" if in_flagged_gap else "")
                     if last_healthy_received is None:
                         # Nothing in the chain predates this, so there is no
                         # evidence either way. Say that, rather than picking a
                         # side: from ledger data alone an outage before the
                         # chain began and a backdated record are identical.
-                        alerts.append(Alert("OUTAGE RECOVERY", seq,
+                        alerts.append(Alert("UNCORROBORATED", seq,
                             f"digest arrived {human(skew)} after the record claims "
                             f"to have been written, and no earlier prompt receipt "
-                            f"exists to establish whether this ledger was reachable "
-                            f"at that time -- cannot be distinguished from "
-                            f"backdating from ledger data alone"))
+                            f"exists to establish that this ledger was reachable at "
+                            f"that time -- this lateness cannot be distinguished "
+                            f"from a digest withheld and submitted later"
+                            + corroboration))
                     elif claimed >= last_healthy_received:
-                        alerts.append(Alert("OUTAGE RECOVERY", seq,
-                            f"digest arrived {human(skew)} after the record was "
-                            f"written, but the record postdates this ledger's last "
-                            f"prompt receipt at {fmt_ts(last_healthy_received)} -- "
-                            f"consistent with a digest spooled during an outage"))
+                        alerts.append(Alert("UNCORROBORATED", seq,
+                            f"digest arrived {human(skew)} after the record claims "
+                            f"to have been written; no digests were received "
+                            f"between {fmt_ts(last_healthy_received)} and "
+                            f"{entry['received']}, so this lateness cannot be "
+                            f"distinguished from a digest withheld and submitted "
+                            f"later" + corroboration))
                     else:
                         alerts.append(Alert("BACKDATED", seq,
                             f"record claims {record['ts']} but its digest reached "
