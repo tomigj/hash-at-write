@@ -24,9 +24,18 @@ identifier and its OUI names the hardware vendor. Published in a repository tied
 to a named individual, it is a durable identifier for that person's personal
 machine and home network, and pushing it is not reversible.
 
-The evidentiary content of a firewall log line is the **timestamp, SRC, DST,
-DPT and the ALLOW/BLOCK verdict**. The MAC field carries none of it. It is
-replaced with `MAC=[redacted]` in anything committed here.
+**Pseudonymised, not blanked.** An earlier version of this rule said to replace
+the MAC field with `[redacted]`. That was wrong, and the first real log showed
+why: the MAC field is what distinguishes traffic relayed by the router from
+traffic sent directly on the LAN, and what establishes that blocked packets came
+from the ledger host itself rather than something else using its address. It also
+carries the ethertype, which is how an IPv4 block is told from an IPv6 one.
+Blanking it destroys that.
+
+Each device gets a stable pseudonym — `<tg-nic>`, `<daddy-nic>`, `<router>` — used
+consistently everywhere, with a mapping in the file. The reader can then follow
+which device sent what, without the permanent identifier being published. The
+ethertype suffix is kept verbatim: `0800` is IPv4, `86dd` is IPv6.
 
 A stated redaction is entirely acceptable in evidence. An unnoticed disclosure
 is not.
@@ -55,3 +64,22 @@ annotated as activation artifacts or excluded, with the exclusion stated.
 A `[UFW BLOCK]` line is evidence of enforcement only when the traffic it names
 was an actual unauthorised inbound attempt, deliberately generated as part of a
 test, at a recorded time.
+
+## 4. The firewall log is a sample, not a complete record
+
+Both hosts run `ufw` at `LOGLEVEL=low`, which rate-limits blocked-packet logging.
+A probe window timed by `date -u` will generally be longer than the span of
+logged blocks inside it — five seconds of one such window produced no lines at
+all, which was rate limiting rather than a gap in enforcement.
+
+So: attempt counts are never derived from log line counts. "Seven blocked SYNs
+were logged" is supportable; "seven SYNs were blocked" is not. And the absence of
+a log line is never evidence that a packet was not blocked.
+
+## 5. Direction is stated on every result
+
+The same port appears with opposite verdicts depending on which way the
+connection ran — `tg -> daddy:9900` is refused because the rule permits it, while
+`daddy -> tg:9900` is dropped because no rule covers it. Both are correct. A
+reader who sees one file say "9900 blocked" and another say "9900 permitted" will
+assume an error unless the direction is explicit in both.
