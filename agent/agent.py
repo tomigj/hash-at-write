@@ -345,6 +345,17 @@ class Agent:
         if self.args.heartbeat_interval > 0:
             threading.Thread(target=self.emit_heartbeats, daemon=True).start()
             print(f"heartbeat every {self.args.heartbeat_interval}s", file=sys.stderr)
+        else:
+            # Not a style warning. Without beats, an attacker who stops the
+            # agent, appends a record at the next sequence, witnesses it
+            # normally and restarts leaves no trace on any other check: the
+            # digest is genuine, the chain is intact, the sequence is in order.
+            # The receipt gap while the agent was stopped is the only evidence
+            # that anything happened, and only silence detection reads it.
+            print("[!] heartbeats DISABLED: a stopped agent leaves no detectable "
+                  "gap, so a record forged at the next sequence and witnessed "
+                  "normally will verify clean. Set --heartbeat-interval and run "
+                  "the verifier with --max-silence.", file=sys.stderr)
         print(f"agent listening on {self.args.socket}, resuming at seq "
               f"{self.last_seq + 1}", file=sys.stderr)
         if self.args.no_hash:
