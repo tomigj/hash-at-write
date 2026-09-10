@@ -41,6 +41,10 @@ from common.canonical import HEARTBEAT_EVENT, compute_digest  # noqa: E402
 PUSH_BACKOFF = (0.05, 0.2, 0.5)
 
 
+class PermanentRefusal(Exception):
+    """The ledger refused a digest in a way that resubmission cannot fix."""
+
+
 def utc_now():
     """ISO-8601 UTC with milliseconds and an explicit Z."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -202,6 +206,11 @@ class Agent:
             raise OSError("ledger closed connection without acknowledging")
         resp = json.loads(ack)
         if not resp.get("ok"):
+            if resp.get("permanent"):
+                # The ledger will refuse this forever -- resubmitting cannot
+                # change the answer. Retrying it every interval would bury the
+                # audit trail in identical entries and never succeed.
+                raise PermanentRefusal(resp.get("error", "refused"))
             raise OSError(f"ledger rejected seq {seq}: {resp}")
         return True
 
@@ -211,6 +220,9 @@ class Agent:
                 time.sleep(delay)
             try:
                 return self._push_once(seq, digest)
+            except PermanentRefusal as exc:
+                self._dead_letter(seq, digest, str(exc))
+                return False
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 if self.ledger is not None:
                     try:
@@ -245,6 +257,22 @@ class Agent:
             except Exception as exc:  # never let a beat kill the agent
                 print(f"[warn] heartbeat failed: {exc}", file=sys.stderr)
 
+    def _dead_letter(self, seq, digest, reason):
+        """Record a digest the ledger will never accept.
+
+        This is a loud condition: either the ledger already holds a different
+        digest for this sequence, or something is wrong that retrying cannot
+        fix. It is recorded once, not retried.
+        """
+        with open(self.args.spool + ".rejected", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"seq": seq, "digest": digest, "ts": utc_now(),
+                                "reason": reason}, sort_keys=True,
+                               separators=(",", ":")) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        print(f"[REFUSED] seq {seq} permanently refused by ledger: {reason}",
+              file=sys.stderr)
+
     def drain_spool(self):
         """Background retry of spooled digests.
 
@@ -265,6 +293,10 @@ class Agent:
                         self._push_once(item["seq"], item["digest"])
                         print(f"[recovered] seq {item['seq']} pushed from spool",
                               file=sys.stderr)
+                    except PermanentRefusal as exc:
+                        # Drop from the spool: it can never be accepted, and
+                        # retrying it forever would poison the audit trail.
+                        self._dead_letter(item["seq"], item["digest"], str(exc))
                     except (OSError, ValueError, json.JSONDecodeError):
                         if self.ledger is not None:
                             try:
