@@ -549,3 +549,58 @@ The evidence position is also better than either host had alone: the runs here
 are against the live stack, and `tg` reproduced them independently from its own
 harness. Fixtures prove what the fixture builder does; two live stacks agreeing
 is a different quality of claim.
+
+---
+
+## 2026-09-10 — `systemctl is-active ssh` was the wrong check, on both hosts
+
+Step 1 surfaced this on `tg`, and checking the same thing here showed it had
+also been wrong in the opposite direction on `daddy`. Recorded in full because
+it is the third instance of the same class of error in this build: a true
+observation carried forward as support for a conclusion it did not support.
+
+The original environment sweep on both hosts used:
+
+    systemctl is-active ssh sshd    ->    inactive / inactive
+
+That output was accurate and meant two completely different things.
+
+**On `tg` it meant the unit does not exist.** `openssh-server` has never been
+installed — `dpkg -l` shows `un`, there are no ssh unit files, and
+`/usr/sbin/sshd` is absent. Step 1's `systemctl enable --now ssh` failed with
+"Unit file ssh.service does not exist." The spec's step 1 had been written
+assuming a service that merely needed enabling.
+
+**On `daddy` it meant the service is socket-activated and currently listening.**
+`openssh-server` is installed, `ssh.socket` is enabled, and the host is
+accepting connections on `0.0.0.0:22` and `[::]:22`. `ssh.service` reads
+inactive until a connection arrives, which is exactly what socket activation
+does. So the ledger host has had an open SSH listener throughout.
+
+That matters beyond tidiness. The evidence instruction issued for step 1 said
+sshd must stay inactive on the ledger, using `systemctl is-active` as the test,
+and named that as what makes claim 4 real — the primary having no inbound path
+to the evidence host. Under that test the ledger passes while listening on every
+interface. Had the capture been taken and filed, `evidence/` would have recorded
+a false statement about the property the whole design rests on.
+
+`systemctl is-active` cannot distinguish "no such unit" from "socket-activated
+and listening". The checks that can:
+
+    dpkg -l openssh-server                       # installed at all?
+    systemctl list-unit-files | grep -E '^ssh'   # units, including .socket
+    ss -tlnp | grep ':22 '                       # actually listening?
+
+The last is the only one that answers the question the threat model asks. What
+matters is not whether a unit is enabled but whether anything is bound to the
+port. Both hosts' environment sweeps should have included it, and the evidence
+protocol now requires it.
+
+**Ordering note, in the build's favour.** Bringing ufw up before sshd was a
+departure from the spec's step order. It pays off on `tg`: installing
+`openssh-server` now starts a daemon behind an already-active deny-incoming
+firewall carrying a single 10.0.0.212 rule, with no exposure window. `tg` has
+four globally routable IPv6 addresses and a default v6 route, and the allow rule
+is IPv4-only, so inbound v6 SSH is denied by policy rather than by luck. Run in
+the original order on a host where the package needed installing, the daemon
+would have come up on a public v6 address ahead of any firewall.
