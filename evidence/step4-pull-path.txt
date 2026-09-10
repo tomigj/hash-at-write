@@ -1,0 +1,126 @@
+Step 4 — the restricted key and the verification pull path
+
+CAPTURED: 2026-09-10, times UTC
+FROM:     daddy 10.0.0.212 (ledger), as the verifier
+TO:       tg 10.0.0.173 (primary), account 'verify'
+
+================================================================================
+1. HOST KEY VERIFIED OUT OF BAND, NOT TRUSTED ON FIRST CONNECT
+================================================================================
+
+The verifier runs with StrictHostKeyChecking=yes and tg's host key was not in
+the ledger's known_hosts. Rather than accept it on first connection, the
+fingerprint was read at tg's physical console and compared with a network scan
+from the ledger:
+
+    reported at tg's console:   SHA256:POl9vG7cc1W5bf89eOTXRq9hBI108ON6iNSRWwqMpEo
+    ssh-keyscan from the ledger: SHA256:POl9vG7cc1W5bf89eOTXRq9hBI108ON6iNSRWwqMpEo
+
+Identical. Nothing is intercepting between the two hosts. Added to known_hosts
+only after the comparison.
+
+A mismatch here would have been a finding rather than an inconvenience, which is
+why it was done this way and not with StrictHostKeyChecking=accept-new.
+
+================================================================================
+2. THE ACCOUNT AND THE FORCED COMMAND — tg, 04:45:57 UTC
+================================================================================
+
+    -rw-rw-r-- 1 tomigj tomigj 4608 Sep 10 00:45 /var/log/integrity/events.log
+    29
+    uid=997(verify) gid=983(verify) groups=983(verify),1002(integrity)
+
+authorized_keys, single line:
+
+    command="/usr/bin/cat /var/log/integrity/events.log",no-port-forwarding,
+    no-agent-forwarding,no-pty,restrict ssh-ed25519 AAAA... witnessd-verifier@daddy
+
+--- How the read permission actually works, because it is not what it looks like
+
+`verify` does NOT read events.log through the integrity group. The file is
+tomigj:tomigj mode 664, so it is readable via the OTHER bits. What the integrity
+group provides is the ability to traverse /var/log/integrity, which is
+drwxr-x--- tomigj:integrity.
+
+The directory is the gate; the file inside is readable to anything that gets
+through it. This matters: if someone later tightens events.log to 640 on the
+assumption that group membership is what carries the access, the pull path breaks
+and the failure will look like an SSH problem rather than a permissions one.
+
+================================================================================
+3. THE FORCED COMMAND TESTED FOUR WAYS — 04:47:53 UTC
+================================================================================
+
+TEST 1  plain connection
+        Returned 81 lines of events.log. No shell.
+
+TEST 2  a different command requested: `ssh verify@tg whoami`
+        Returned events.log, NOT the output of whoami. The forced command
+        ignores whatever the client asks for. This is the demonstration that
+        matters -- the key cannot be used to run anything else.
+
+TEST 3  interactive shell requested with -t
+        "Pseudo-terminal will not be allocated". Returned the log instead of a
+        shell.
+
+TEST 4  port forwarding: ssh -N -L 19999:127.0.0.1:22
+        Refused; the connection did not establish a forward and timed out.
+
+================================================================================
+4. END-TO-END VERIFICATION — THE FIRST FULL PASS
+================================================================================
+
+The verifier pulled the log over the restricted channel and recomputed
+everything locally against the chain:
+
+    chain=82  log=82  heartbeats=12
+
+Exact parity between the digests the ledger holds and the records the primary
+serves. Alert breakdown:
+
+    TAMPER        none
+    DELETION      none
+    UNWITNESSED   none
+    CHAIN BREAK   none
+    SILENCE       none
+    BACKDATED     none
+    LATE DIGEST   none
+    UNCORROBORATED  0   -- predicted in advance, see below
+
+--- The UNCORROBORATED alerts were stated before the run, not explained after
+
+The first 21 digests were spooled during the unplanned outage in step 3 and
+delivered at 04:37 for records written at 04:24-04:25 -- a skew of roughly twelve
+minutes against --max-skew 300s. Each reads:
+
+    digest arrived 12.4 minutes after the record claims to have been written,
+    and no earlier prompt receipt exists to establish that this ledger was
+    reachable at that time -- this lateness cannot be distinguished from a
+    digest withheld and submitted later
+
+That is the correct verdict and the honest one. The chain begins with this burst,
+so there is no earlier prompt receipt against which to establish that the ledger
+was reachable when those records were written. From ledger data alone, an outage
+before the chain began and a set of records withheld and submitted later are
+indistinguishable -- and the alert says exactly that rather than picking the
+benign reading.
+
+This is the first live occurrence of a case previously only constructible as a
+fixture in tests/repro_scenarios.py.
+
+================================================================================
+5. WHAT THIS DOES AND DOES NOT ESTABLISH
+================================================================================
+
+Establishes: the ledger can retrieve the primary's log over a channel restricted
+to reading one file, and can verify it independently. The primary is never asked
+what its own digests are or whether it considers itself intact.
+
+Does NOT establish that the forced command protects the evidence. It is least
+privilege for the ledger's access INTO the primary. Under the threat model the
+primary is fully compromised, so a rooted primary can replace this
+authorized_keys file and serve doctored content. The design survives that because
+doctored content fails against digests that left the machine at write time --
+which means the property comes from where the digests are, not from this
+restriction. The build spec's claim that "the forced command is what makes claim
+4 real" is wrong and is corrected in the amended spec.
