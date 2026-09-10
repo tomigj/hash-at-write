@@ -58,6 +58,10 @@ class Chain:
         # Without this the chain can only ask "is this seq old?", which cannot
         # distinguish a lost acknowledgement from an attack.
         self.digests = {}
+        # The sequence the chain started from, so a ledger brought up against
+        # an agent with existing history is not treated as if it had skipped
+        # everything before it.
+        self.seq_base = None
         self._load()
 
     def _load(self):
@@ -90,6 +94,8 @@ class Chain:
                     # file as it exists. The discrepancy is now on record.
                     computed = entry.get("chain_hash", computed)
                 seq = int(entry.get("seq", 0))
+                if self.seq_base is None:
+                    self.seq_base = seq - 1
                 self.digests[seq] = entry.get("digest")
                 self.last_seq = max(self.last_seq, seq)
         self.head = computed
@@ -108,9 +114,9 @@ class Chain:
         """Append one digest, or refuse and say why."""
         with self.lock:
             if not isinstance(seq, int) or seq <= 0:
-                return False, "seq must be a positive integer"
+                return False, "seq must be a positive integer", True
             if len(digest) != 64 or not all(c in "0123456789abcdef" for c in digest):
-                return False, "digest must be 64 lowercase hex characters"
+                return False, "digest must be 64 lowercase hex characters", True
 
             # The sequence number is chosen by the submitter and, before this
             # check, was unbounded. A single packet claiming seq 999999 is
@@ -123,12 +129,28 @@ class Chain:
             #
             # An empty chain accepts any starting point, so a ledger can be
             # brought up against an agent that already has history.
-            if self.last_seq and seq > self.last_seq + self.seq_window:
-                self.audit("IMPLAUSIBLE_SEQ", {
-                    "seq": seq, "peer": peer, "chain_head_seq": self.last_seq,
-                    "window": self.seq_window})
-                return False, (f"seq {seq} is more than {self.seq_window} beyond "
-                               f"chain head {self.last_seq}")
+            # Bounding the size of a single jump does not bound where the head
+            # ends up: 999 at a time, one round trip each, walks it anywhere.
+            # What has to be bounded is the gap between the sequence claimed and
+            # the number of digests actually chained, because that gap IS the
+            # count of sequences this ledger has never seen. Legitimate gaps come
+            # from spooling and are bounded by the backlog; a walk inflates the
+            # gap on every step and is refused on the second one.
+            if self.seq_base is not None:
+                unseen = (seq - self.seq_base) - len(self.digests)
+                if unseen > self.seq_window:
+                    self.audit("IMPLAUSIBLE_SEQ", {
+                        "seq": seq, "peer": peer, "chain_head_seq": self.last_seq,
+                        "chained": len(self.digests), "unseen": unseen,
+                        "window": self.seq_window})
+                    # NOT permanent. After a long outage a genuine new event can
+                    # legitimately arrive far ahead of a spool that has not
+                    # drained yet. Refusing it permanently would dead-letter a
+                    # real digest and lose evidence; refusing it retryably lets
+                    # it succeed once the backlog catches up.
+                    return False, (f"seq {seq} implies {unseen} sequences never "
+                                   f"seen by this ledger (window {self.seq_window}); "
+                                   f"retry after the backlog drains"), False
 
             # What actually constitutes a rewrite is a DIFFERENT digest for a
             # sequence number already recorded. An identical digest for a
@@ -144,11 +166,12 @@ class Chain:
                         "seq": seq, "peer": peer,
                         "note": "identical digest already chained; "
                                 "acknowledging without appending"})
-                    return True, None
+                    return True, None, False
                 self.audit("REFUSED_REWRITE", {
                     "seq": seq, "peer": peer,
                     "chained_digest": existing, "submitted_digest": digest})
-                return False, f"seq {seq} already chained with a different digest"
+                return False, (f"seq {seq} already chained with a different "
+                               f"digest"), True
 
             # A sequence number below the head that was never chained is a
             # legitimate late arrival -- the agent spooled it while this host
@@ -156,6 +179,8 @@ class Chain:
             # by construction. It is accepted, and marked, because a digest
             # arriving out of order is worth seeing: it is also the shape a
             # backfill attempt would take.
+            if self.seq_base is None:
+                self.seq_base = seq - 1
             out_of_order = seq < self.last_seq
             chain_hash = next_chain_hash(digest, self.head)
             entry = {"seq": seq, "digest": digest, "prev_chain": self.head,
@@ -174,7 +199,7 @@ class Chain:
             self.head = chain_hash
             self.digests[seq] = digest
             self.last_seq = max(self.last_seq, seq)
-            return True, None
+            return True, None, False
 
 
 class Handler(socketserver.StreamRequestHandler):
@@ -198,14 +223,14 @@ class Handler(socketserver.StreamRequestHandler):
             except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
                 self.reply({"ok": False, "error": f"malformed submission: {exc}"})
                 continue
-            ok, err = self.server.chain.submit(seq, digest, peer)
+            ok, err, permanent = self.server.chain.submit(seq, digest, peer)
             # The acknowledgement carries no chain state. The submitter learns
             # only whether its digest was recorded.
             # A refusal here is permanent by construction -- resubmitting the
             # same thing will always be refused. Saying so lets the agent move
             # it to a dead-letter file instead of retrying it forever.
             self.reply({"ok": True, "seq": seq} if ok
-                       else {"ok": False, "error": err, "permanent": True})
+                       else {"ok": False, "error": err, "permanent": permanent})
 
     def reply(self, obj):
         self.wfile.write((json.dumps(obj, sort_keys=True,
