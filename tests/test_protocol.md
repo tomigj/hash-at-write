@@ -6,6 +6,10 @@ than the expected result, that is recorded rather than smoothed over.
 
 Times are UTC. Full captures are in `evidence/`.
 
+**All twelve scenarios complete.** Five of them were run more than once, or
+produced something other than the expected result the first time, and those are
+recorded as they happened rather than as they were eventually made to work.
+
 ---
 
 ## Status
@@ -18,13 +22,13 @@ Times are UTC. Full captures are in `evidence/`.
 | T3b | Deletion, middle record | **PASS** | `step6-tamper-deletion.txt` |
 | T4 | Legitimate activity, false-positive check | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
 | T5 | Write refusal | **PASS** | `step1-claim4-reverse-test.txt`, `step7-chain-integrity.txt` |
-| T6 | Overhead | partial | `step5-clean-run.txt` |
+| T6 | Overhead | **PASS** | `NOTES.md`, `step5-clean-run.txt` |
 | T7 | Unwitnessed insertion | **PASS** | `tests/run_attack_suite.py` |
 | T8 | Backdating | **PASS** | `tests/run_attack_suite.py` |
 | T9 | Stopped agent | **PASS** (incidental) | `step6-tamper-deletion.txt` |
 | T10 | Lost acknowledgement | **PASS** (unplanned) | `step3-push-path.txt` |
-| T11 | Implausible sequence | pending | — |
-| T12 | Fabrication, expected to pass verification | **PASS** | `NOTES.md` |
+| T11 | Implausible sequence | **PASS** | `step9-t11-sequence-bound.txt` |
+| T12 | Fabrication, expected to pass verification | **PASS** | `tests/run_attack_suite.py`, `NOTES.md` |
 
 ---
 

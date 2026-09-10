@@ -1,0 +1,91 @@
+T11 — implausible sequence numbers
+
+CAPTURED: 2026-09-10, times UTC
+
+Split deliberately. The refusals ran against the production ledger, because they
+write no chain entry and cannot affect it. The accepted case ran against a
+throwaway instance, because accepting a digest is permanent on an append-only
+chain and would have set a delayed-action trap — see the demonstration below.
+
+================================================================================
+1. REFUSALS, AGAINST THE PRODUCTION LEDGER — 05:58:55 UTC
+================================================================================
+
+Submitted from the primary, through the real firewall rule, to the live ledger:
+
+    seq 999999  -> {"error":"seq 999999 implies 999891 sequences never seen by
+                     this ledger (window 1000); retry after the backlog drains",
+                     "ok":false,"permanent":false}
+
+    seq 5000    -> {"error":"seq 5000 implies 4892 sequences never seen by this
+                     ledger (window 1000); retry after the backlog drains",
+                     "ok":false,"permanent":false}
+
+Both refused, audited as IMPLAUSIBLE_SEQ, and no chain entry written — the
+refusal returns before the append.
+
+`permanent: false` is deliberate and matters. After a long outage a genuine new
+event can legitimately arrive far ahead of a spool that has not drained. A
+permanent refusal would dead-letter a real digest and lose evidence, so the
+refusal is retryable and succeeds once the backlog catches up.
+
+================================================================================
+2. ACCEPTED CASE, ON A THROWAWAY INSTANCE
+================================================================================
+
+A separate ledgerd on loopback:19911 with its own chain file, bootstrapped to
+head 58 so it mirrors production's state.
+
+    seq 58,   bootstrap on empty chain      -> {"ok":true,"seq":58}
+    seq 200,  inside the window (head 58)   -> {"ok":true,"seq":200}
+    seq 5000, outside the window            -> refused, IMPLAUSIBLE_SEQ
+
+Acceptance, refusal and the boundary between them on one instance in one session.
+The contrast is what shows the window is discriminating, rather than the ledger
+taking whatever arrives.
+
+================================================================================
+3. THE PRODUCTION TRAP, DEMONSTRATED RATHER THAN ARGUED
+================================================================================
+
+The original plan submitted seq 200 to the PRODUCTION chain, on the reasoning
+that a junk digest would surface as a DELETION and that this was the evidence.
+That reasoning was wrong, and the error was not in the immediate effect but in
+failing to follow the sequence forward.
+
+The production agent was at seq 58 and beats once a minute. It reaches seq 200 in
+roughly 140 minutes on its own, and submits the GENUINE digest for its own
+record at that sequence. On the throwaway instance, that submission:
+
+    seq 200 again, with its real digest
+      -> {"error":"seq 200 already chained with a different digest",
+          "ok":false,"permanent":true}
+
+    audit: REFUSED_REWRITE {"chained_digest":"f50ff7ed1ab8a07b...", "seq":200}
+
+`permanent: true`, so the agent dead-letters it. Unattended, hours later:
+
+  - a genuine record goes permanently unwitnessed
+  - the ledger's audit log gains the exact signature of a rewrite attack
+  - the dead-letter file gains a real digest that was never recorded
+
+All three false, all three permanent on an append-only file, all three landing in
+evidence while nobody is watching.
+
+The general hazard, which is the part worth carrying forward: **any accepted
+out-of-window digest is a delayed-action collision, at a distance the submitter
+chooses.** Sequence numbers only climb, so there is no safe number — only a
+farther one. Test data must never be written into a production chain.
+
+"We chose not to write junk into the production chain" is a judgement call. The
+refusal above, at the sequence it would have occurred, is evidence.
+
+================================================================================
+4. SCOPE
+================================================================================
+
+Sections 2 and 3 ran on loopback, one host, a throwaway chain, no network between
+the parties. That is adequate for acceptance and refusal logic, which is what T11
+tests. It is NOT a demonstration of split custody and must not be presented as
+one. Section 1 did cross the network to the production ledger through the real
+firewall rule.
