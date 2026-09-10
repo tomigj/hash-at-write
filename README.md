@@ -63,6 +63,18 @@ that holds the log. Integrity has to rest on something the compromised host cann
 application never emits an event, nothing here helps), and wholesale rollback of the ledger host
 itself. The last of these is addressed by external anchoring — see the roadmap.
 
+**Also out of scope, and worth stating plainly: fabrication.** This system establishes that a
+record has not been altered or removed since it was witnessed. It does not establish that the
+event the record describes actually happened. An attacker with root on the log-producing host can
+stop the agent, write a fabricated entry with a truthful timestamp, have its digest witnessed
+through the normal path, and restart — and the result is byte-identical, in every property this
+design checks, to a genuine record. There is nothing left to detect at that point, because the
+attacker is no longer tampering with evidence; they are producing it.
+
+The distinction matters because "the primary cannot alter the evidence about its own logs" is true
+of alteration and removal, and false of insertion. Omission and insertion are different failures,
+and only the first is covered by the completeness caveat above.
+
 ---
 
 ## Approach
@@ -212,6 +224,12 @@ Stated up front rather than discovered by whoever reads the code.
   constant to linear, rather than eliminating it. An attacker willing to submit roughly a thousand
   digests per thousand sequences can still advance the head, and every one of those submissions
   raises an alert.
+- A record fabricated on the primary and witnessed through the normal path verifies clean, and
+  always will. The liveness heartbeat bounds the window in which an agent can be stopped to insert
+  one — roughly one beat interval — but it cannot close it, because a stop shorter than the
+  interval trips nothing. Verified: a fabricated SSH authentication with a truthful timestamp,
+  inserted during an eight-second stop with heartbeats at two seconds, produced no alert of any
+  kind.
 - Detecting that a digest arrived late is not the same as knowing why. From the ledger's position,
   "the ledger was unreachable" and "the primary chose not to speak" are the same observation, so a
   primary under full root can manufacture a quiet window and date a forged record into it. Running

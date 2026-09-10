@@ -431,3 +431,50 @@ a record that does not exist, so a 1000-step walk produces 1000 DELETION alerts
 "raised the cost to linear", not "bounded", and the limitation that the ledger
 accepts submissions from whatever can reach the port is now stated in the
 README.
+
+---
+
+## 2026-09-10 — The design boundary: fabrication is not detectable
+
+Raised by the `tg` session, reproduced here against the live stack rather than a
+fixture — real agent, real ledgerd, real push path, every check enabled.
+
+Every backdating case tested so far involves the attacker lying about *when*. If
+they do not lie about when, nothing fires. Stop the agent, append one fabricated
+record with a truthful current timestamp, push its digest through the normal
+path, restart:
+
+    record: {"seq":6, "event":"Accepted publickey for root from 10.0.0.1"}
+    verifier --max-silence 60 --max-skew 300:
+    chain=7 log=7 heartbeats=1 -> CLEAN     exit 0
+
+Genuine digest, intact chain, in-order sequence, truthful timestamp. No
+BACKDATED, no UNCORROBORATED, no UNWITNESSED, no SILENCE.
+
+**This is not a defect. It is the edge of what the design can do**, and it is
+categorically different from everything else in this file. The other findings
+were implementation bugs with fixes. This one has no fix within the approach: a
+record fabricated on the primary and witnessed at write time is byte-identical,
+in every property the system checks, to a genuine one. The attacker is not
+tampering with evidence at that point; they are producing it.
+
+Heartbeats bound the insertion window to roughly one beat interval, because a
+stop shorter than the interval trips nothing. They shrink it. They do not close
+it, and the user must not be told they do.
+
+The README's out-of-scope line covered *omission* ("if the application never
+emits an event, nothing here helps"). Omission and insertion are different
+failures and it did not cover the second. A reader seeing "tamper-evident audit
+logging" will reasonably assume a fabricated entry is caught. It is not.
+
+Now stated in the threat model rather than only here, because for a filing this
+matters more than any bug fixed so far: everything else was a defect in the
+implementation, and a reviewer who finds *this* unstated will discount the parts
+that do work. Stating it also sharpens the real claim — the system establishes
+that a record has not been altered or removed since it was witnessed, which is
+precise, defensible and still worth having.
+
+**Correction to an earlier report:** the previous limitations commit was
+described as adding five bullets to the README. It added four — flat subnet,
+open port, linear-cost walk, and lateness without heartbeats. Recorded because
+the standard being held everywhere else applies to reports about the work too.
