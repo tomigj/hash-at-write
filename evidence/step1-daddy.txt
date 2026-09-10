@@ -1,0 +1,94 @@
+Step 1 — ledger host `daddy` (10.0.0.212)
+Captured at the physical keyboard by the operator. Verbatim terminal output.
+
+Run with the VPN paused, deliberately: enabling ufw installs a fresh ruleset
+whose ESTABLISHED,RELATED accept only matches flows conntrack is tracking under
+the new rules, so connections predating the enable lose their return path and
+die. Bringing the firewall up while the tunnel was down avoided severing it.
+
+================================================================================
+BEFORE — 2026-09-10 03:55:10 UTC
+================================================================================
+
+Thu Sep 10 03:55:10 AM UTC 2026
+[sudo: authenticate] Password:
+Status: inactive
+
+  ufw was inactive beforehand, so there was no prior ruleset to preserve or
+  report. As on the primary, no pre-existing allow rules exist to disclose.
+
+================================================================================
+APPLY — no errors
+================================================================================
+
+Default incoming policy changed to 'deny'
+(be sure to update your rules accordingly)
+Default outgoing policy changed to 'allow'
+(be sure to update your rules accordingly)
+Rules updated
+Firewall is active and enabled on system startup
+
+================================================================================
+AFTER — 2026-09-10 03:55:15 UTC
+================================================================================
+
+Thu Sep 10 03:55:15 AM UTC 2026
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+9900/tcp                   ALLOW IN    10.0.0.173                 # digest submissions from primary
+
+LISTEN 0      4096         0.0.0.0:22        0.0.0.0:*
+LISTEN 0      4096            [::]:22           [::]:*
+
+================================================================================
+READING THIS CAPTURE
+================================================================================
+
+Exactly one inbound rule: TCP 9900 from the primary only. This is the write-only
+digest path. Nothing else inbound is permitted, by default policy, over either
+address family -- `Default: deny (incoming)` covers IPv6 as it does on the
+primary.
+
+`disabled (routed)` confirms no forwarding. This host does not bridge the zones.
+
+**The SSH listener is present and must be described accurately.** `ss` shows sshd
+bound to 0.0.0.0:22 and [::]:22. openssh-server is installed here and
+socket-activated, exactly as on the primary. So the statement "the primary has no
+inbound SSH path to the ledger" is true by FIREWALL POLICY, not by the absence of
+a daemon. The distinction matters: an attacker who could alter this host's
+firewall would find a listener waiting, whereas one who could alter a host with
+no SSH server installed would not.
+
+Nothing in the threat model depends on the difference -- the threat model assumes
+the ledger is not compromised -- but the write-up must not claim the ledger runs
+no SSH server, because it does.
+
+This was very nearly recorded wrongly. The original step 1 instruction used
+`systemctl is-active ssh` as the test for "sshd is off here", and that command
+reports `inactive` on both hosts while port 22 is listening, because Ubuntu 24.04
+ships SSH socket-activated. Filed under that check, this capture would have
+asserted the ledger had no SSH listener while it had one on every interface.
+`ss -tlnp` is the check that answers the question.
+
+================================================================================
+STATUS
+================================================================================
+
+Step 1 complete on `daddy`: ufw active, one inbound rule scoped to the primary on
+the digest port, default deny incoming over both address families, no routing.
+Directories /var/lib/ledger and /var/log/verifier created and owned by the
+service account.
+
+Step 1 is now complete on both hosts.
+
+Outstanding: the reverse connectivity test from the primary, which is the direct
+evidence for claim 4 -- the primary attempting to reach this host on port 22
+(expected: dropped) and on 9900 (expected: refused, since the rule permits it but
+ledgerd is not yet running). Two different failures from the same source seconds
+apart demonstrate the firewall discriminating by port, which a rule listing
+cannot show.
