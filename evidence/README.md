@@ -65,6 +65,27 @@ A `[UFW BLOCK]` line is evidence of enforcement only when the traffic it names
 was an actual unauthorised inbound attempt, deliberately generated as part of a
 test, at a recorded time.
 
+## 3b. What is published deliberately
+
+Two things in the captured authentication events were identified before commit
+and published on a considered decision, not by oversight.
+
+**The verifier's public key fingerprint** appears in every accepted-publickey
+line. It is a public key, scoped to a forced command on one host, and redacting
+it would obscure that the captured authentications are genuine rather than
+synthesised. The only cost is that the fingerprint permanently identifies that
+keypair, so reusing the key elsewhere would link the two — an argument for not
+reusing it, rather than for hiding it.
+
+**sudo session lines** showing privilege escalation by the operator, in the form
+`session opened for user root(uid=0) by tomigj(uid=1000)`. This is the operator's
+own activity on their own machine, and it is the kind of event the system exists
+to record. Removing it would make the captured set less representative of what a
+real audit trail contains.
+
+Both were put to the operator with the tradeoffs stated and both were approved
+for publication.
+
 ## 4. The firewall log is a sample, not a complete record
 
 Both hosts run `ufw` at `LOGLEVEL=low`, which rate-limits blocked-packet logging.
