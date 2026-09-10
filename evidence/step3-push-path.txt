@@ -1,0 +1,158 @@
+Step 3 — the digest push path, primary to ledger
+
+CAPTURED: 2026-09-10, times UTC
+LEDGER:   daddy 10.0.0.212, ledgerd bound to the LAN address, --allow 10.0.0.173
+PRIMARY:  tg 10.0.0.173, agent with --ledger-host 10.0.0.212 --ledger-port 9900
+
+This step did not go to plan, and the deviation produced better evidence than the
+plan would have. The sequence below is what happened, in order.
+
+================================================================================
+1. AN UNPLANNED OUTAGE — CHANNEL INTERRUPTION, DEMONSTRATED
+================================================================================
+
+The agent was started on the primary at 04:24:42 before ledgerd was listening.
+Twenty events were emitted at 04:25:00. Every push failed:
+
+    [GAP] seq 1 not pushed to ledger: [Errno 111] Connection refused
+    ... seq 2 through 20, identical
+    seq 1..20 -> SPOOLED
+
+Every property the design promises for channel interruption held:
+
+  - the digest was computed and written to disk BEFORE any push was attempted
+  - the push retried on the inline backoff, then spooled rather than dropped
+  - the reason was recorded per digest in the spool file, not merely "failed"
+  - [GAP] was printed to stderr for every one
+  - 21 records in the log against 21 digests in the spool -- exact parity
+  - the heartbeat at seq 21 spooled alongside the events, so liveness survived
+    the outage too
+
+The roadmap listed channel interruption as an unexercised failure mode. It was
+exercised on real hardware, unplanned, and nobody staged it.
+
+The refusal itself was informative: 76ms, "Connection refused", which is an RST
+from the ledger's kernel. Identical in shape to the 03:59 reverse test. The
+firewall rule, the write path and the agent were all correct; only a listening
+process was missing.
+
+================================================================================
+2. THE AGENT EXITED, AND THE DIAGNOSIS THAT FOUND IT
+================================================================================
+
+The agent process was gone before ledgerd started. It had exited cleanly -- no
+stale socket in /var/lib/integrity, the finally block having unlinked it.
+
+What established this was the heartbeat. events.log had not grown past seq 21,
+last written 04:25:42. At a 60s interval, eleven beats were missing. Heartbeats
+not firing means handle_event is not running, which means the process is not
+alive -- which ruled out the competing hypothesis of a dead drain thread inside a
+live process.
+
+The liveness beat was added to detect a stopped agent as an attack signal. Its
+first two uses have both been operational: catching a wrong configuration at step
+2, and here distinguishing a dead process from a dead thread. Worth recording
+that the mechanism earns its keep outside the threat model as well as inside it.
+
+================================================================================
+3. RECOVERY — THE SPOOL DRAINED WITHOUT ANYONE TOUCHING THE PRIMARY
+================================================================================
+
+ledgerd started 04:34:29. The agent was restarted on the primary and recovered
+its sequence from disk:
+
+    agent listening on /var/lib/integrity/agent.sock, resuming at seq 22
+
+The drainer then pushed all 21 spooled digests unattended:
+
+    seq 1  received 2026-09-10T04:37:26.568Z
+    seq 21 received 2026-09-10T04:37:26.697Z
+    21 digests in 129ms
+
+Chain verified independently of ledgerd, recomputing every link from genesis:
+
+    22 entries, 0 chain errors
+
+No entry carried out_of_order: the digests arrived in sequence onto an empty
+chain, which is the bootstrap path -- seq_base establishing its baseline from the
+first submission rather than assuming the chain starts at 1.
+
+================================================================================
+4. A BUG FOUND BY RUNNING IT — IDLE CONNECTION TEARDOWN
+================================================================================
+
+ledgerd's request handler carried a 30-second socket timeout while the agent's
+heartbeat interval is 60 seconds. The agent holds one connection open and speaks
+only when it has a digest, so every gap between beats exceeded the timeout:
+
+    Exception occurred during processing of request from ('10.0.0.173', 38430)
+    Traceback (most recent call last):
+      ...
+      File "ledger/ledgerd.py", line 216, in handle
+        for raw in self.rfile:
+    TimeoutError: timed out
+
+The agent recovers -- its next push fails on the stale socket, retries and
+reconnects -- so no digest is lost. But normal operation becomes a permanent
+cycle of failed-then-retried pushes, and the ledger's log fills with tracebacks
+that read as faults in an evidence capture.
+
+Fixed two ways: the timeout is caught and the connection closed quietly, since an
+idle connection reaching its timeout is ordinary rather than exceptional; and the
+default is raised to 300s with the constraint documented, that it must exceed the
+agent's heartbeat interval.
+
+This was not reachable by fixtures. It required a real agent holding a real
+connection open across a real idle period.
+
+================================================================================
+5. LEDGERD STARTUP REPLAY, VERIFIED AGAINST A REAL APPEND-ONLY FILE
+================================================================================
+
+Restarting ledgerd to apply the fix exercised a path previously only tested on
+constructed data: recomputing the chain head from an existing file.
+
+    ledgerd reported:  chain head seq=23 hash=6d34319904f9e506...
+    independent recomputation over the same 23 entries:  6d34319904f9e506...
+
+Identical. The chain file has carried chattr +a since before its first byte was
+written, so this is the replay running against a genuinely append-only file.
+
+The append-only attribute does not impede ledgerd: it opens both the chain and
+the audit file in append mode. Confirmed earlier when a REJECTED_PEER audit line
+was written successfully to the +a audit file.
+
+================================================================================
+6. STEADY STATE
+================================================================================
+
+    seq 24 received 2026-09-10T04:40:16.856Z
+    seq 25 received 2026-09-10T04:41:16.887Z
+
+Exactly 60 seconds apart, matching the configured heartbeat interval. Connection
+established and stable. No tracebacks since the fix.
+
+Between the two ledgerd instances there was a ~23 second gap during which nothing
+was listening. The agent reconnected on its own and the chain continued unbroken
+across the restart, which is the interruption-and-recovery path holding a second
+time in the same session.
+
+================================================================================
+7. STATUS AND WHAT REMAINS
+================================================================================
+
+Step 3 complete. Digests flow from the primary to the ledger, chain entries
+appear, the chain verifies from genesis, and both the outage and the recovery
+paths have been demonstrated on hardware rather than in fixtures.
+
+NOT yet done, and deliberately not entangled with the above: a clean steady-state
+run of step 3 from an empty log and an empty chain, with no recovery in it. The
+evidence here is a recovery, and a recovery is a more interesting artefact but a
+worse baseline.
+
+Expected on the first verification, and stated here in advance rather than
+explained afterwards: the 21 drained digests carry record timestamps from
+04:24-04:25 and were received at 04:37, a skew of roughly twelve minutes against
+a --max-skew of 300s. They will raise UNCORROBORATED. That is correct behaviour
+and the first live occurrence of a case previously only constructible as a
+fixture.

@@ -203,7 +203,14 @@ class Chain:
 
 
 class Handler(socketserver.StreamRequestHandler):
-    timeout = 30
+    # Set from --idle-timeout at startup. Must exceed the agent's heartbeat
+    # interval: the agent holds one connection open and speaks only when it has
+    # a digest, so a timeout shorter than the beat interval tears the connection
+    # down between every pair of beats. The agent recovers -- its next push
+    # fails on the stale socket, retries, and reconnects -- but it turns normal
+    # operation into a permanent cycle of failed-then-retried pushes, and fills
+    # this log with tracebacks that look like faults in an evidence capture.
+    timeout = 300
 
     def handle(self):
         peer = self.client_address[0]
@@ -213,6 +220,16 @@ class Handler(socketserver.StreamRequestHandler):
             # instead of merely dropped.
             self.server.chain.audit("REJECTED_PEER", {"peer": peer})
             return
+        try:
+            self._serve(peer)
+        except TimeoutError:
+            # An idle connection reaching its timeout is ordinary: the agent has
+            # simply had nothing to send. Closing quietly is the correct
+            # response. Letting it propagate makes socketserver print a
+            # traceback that reads as a failure.
+            pass
+
+    def _serve(self, peer):
         for raw in self.rfile:
             raw = raw.strip()
             if not raw:
@@ -251,6 +268,10 @@ def main():
     p.add_argument("--port", type=int, default=9900)
     p.add_argument("--chain", default="/var/lib/ledger/chain.jsonl")
     p.add_argument("--audit", default="/var/lib/ledger/ledgerd-audit.jsonl")
+    p.add_argument("--idle-timeout", type=float, default=300,
+                   help="close a connection after this many seconds of silence. "
+                        "Must exceed the agent's --heartbeat-interval, or the "
+                        "connection is torn down between every pair of beats.")
     p.add_argument("--seq-window", type=int, default=1000,
                    help="refuse a sequence number more than this far beyond the "
                         "current chain head. Bounds the damage an arbitrary seq "
@@ -262,6 +283,7 @@ def main():
     args = p.parse_args()
 
     chain = Chain(args.chain, args.audit, args.seq_window)
+    Handler.timeout = args.idle_timeout
     srv = Server((args.bind, args.port), Handler)
     srv.chain = chain
     srv.allowed = set(args.allow)
