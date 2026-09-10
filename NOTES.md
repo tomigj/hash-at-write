@@ -519,3 +519,33 @@ rerunning it with a tuned threshold.
 Recorded rather than quietly edited, because a stated result that does not hold
 under the stated configuration is precisely the failure this project exists to
 make impossible. It should not appear in this project's own README.
+
+### Reproduction notes for the fabrication result
+
+Both stated configurations were independently rerun on `tg`'s live stack and
+agree with the runs here. Two things will trip up anyone reproducing it.
+
+**A trailing SILENCE appears if you verify after stopping the agent.** The
+open-interval check compares the last receipt against *now*, so verifying a few
+seconds after the harness has stopped the agent for good produces
+`SILENCE seq=N->now`. That is the harness ending with a dead agent, not
+detection of the fabrication. Verify while the agent is still running, or expect
+to read past it. In both the 1s and 8s cases the *insertion* gap is silent.
+
+**The measured gap runs longer than the stop.** An 8-second stop shows as a
+10-second gap, because the last beat before the stop can be up to a full
+interval old when the stop begins, and the first beat after restart arrives an
+interval later still. Anyone measuring "eight seconds" and reading ten has not
+found a discrepancy.
+
+This also refines the attacker's arithmetic, in the design's favour. The window
+is not the threshold; it is the threshold minus up to one beat interval, because
+that slack is added to the gap for free. At 2s beats and a 6s threshold the real
+room is about four seconds, not six. Small, but it is the number an attacker
+would actually compute, and it is the number to use rather than the more
+generous one already written.
+
+The evidence position is also better than either host had alone: the runs here
+are against the live stack, and `tg` reproduced them independently from its own
+harness. Fixtures prove what the fixture builder does; two live stacks agreeing
+is a different quality of claim.
