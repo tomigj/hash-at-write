@@ -383,3 +383,51 @@ Current state: 6/6 produce their expected alert.
 Seven reproduced failure modes with scripts is a materially stronger evidence
 package than the four scenarios the build spec originally called for, and every
 one of them was found by testing rather than by inspection.
+
+---
+
+## 2026-09-10 — The soft label was attacker-inducible
+
+Raised by the `tg` session in answer to a question put to it: is
+OUTAGE RECOVERY the useful label, or only the honest one?
+
+Neither, as it stood. From the ledger's position, "I was unreachable" and "the
+primary chose not to speak" are the same observation. Under full root the
+primary can go quiet deliberately, manufacture the window, and date a forged
+record into it — earning the softer label precisely because it created the
+condition that excuses it. Demonstrated with five prompt receipts, forty minutes
+of deliberate quiet while the ledger stayed up, and a forged "admin login by
+nobody in particular" dated inside the attacker's own window.
+
+Two changes:
+
+**The wording asserted more than the ledger knows.** "Consistent with a digest
+spooled during an outage" states that an outage occurred. The ledger only knows
+it heard nothing. The alert now says no digests were received between two
+timestamps and that the lateness cannot be distinguished from a digest withheld
+and submitted later. In a filing that is the difference between a finding and an
+inference. The alert kind changed from OUTAGE RECOVERY to UNCORROBORATED for the
+same reason: the old name asserted the benign reading in the label itself.
+
+**The corroborating fact was in the same pass and went unmentioned.** If the
+quiet window excusing a late digest is itself large enough to be reported as
+SILENCE, the excuse rests on the primary's own absence. The verifier now says so
+inline rather than leaving a reader to connect two unrelated-looking lines.
+
+This is the third finding to land on the heartbeat decision. The exposure is no
+longer only the in-order forgery: without heartbeats, the softer alert labels
+become attacker-controllable. Heartbeats should be treated as a prerequisite for
+any run that produces evidence, not as a tuning parameter.
+
+## 2026-09-10 — Walk: bounded to linear cost, not closed
+
+The gap bound stops the free walk but not one paid for. Filling seqs 2..1000
+with real submissions inflates the chained count, after which the jump to 1999
+is accepted. Cost rises from one packet per 999 sequences to about a thousand.
+
+Not fixing further. The attack is now self-alerting — every filler digest is for
+a record that does not exist, so a 1000-step walk produces 1000 DELETION alerts
+— and more machinery would buy little. The honest framing for the write-up is
+"raised the cost to linear", not "bounded", and the limitation that the ledger
+accepts submissions from whatever can reach the port is now stated in the
+README.
