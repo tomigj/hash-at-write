@@ -686,3 +686,71 @@ The hash is under 2%, most of it interpreter time rather than SHA-256.
 is a smoke test with a 5.2x spread; T6 needs orders of magnitude more samples and
 percentiles rather than means. The temptation to close a known limitation on the
 first favourable number is exactly what the truthfulness rule is for.
+
+---
+
+## 2026-09-10 — Overhead: the hash is not the cost, the synchronous push is
+
+Recorded before T6 runs, deliberately. T6 measures per-event overhead, and
+without this note its number will be read as the cost of hashing. It is not.
+
+Live push timings from the primary, six samples, real network:
+
+    push_us  min 7342  med 77177  max 96173      pushed=true on 6 of 6
+    ICMP to the ledger at the same time:  avg 5.9ms
+
+The distribution is bimodal: two samples at 7-9ms, four at 76-96ms.
+
+**The ledger's fsync is not the cause.** Measured here, 50 samples on the same
+NVMe filesystem as chain.jsonl: median 919µs. So `Chain.submit`'s
+write-flush-fsync-before-acknowledging contributes about a millisecond. The
+append-only attribute does not make it expensive.
+
+The budget closes on the fast mode:
+
+    RTT ledger to primary        ~6-8ms
+    ledger fsync                 ~0.9ms
+    expected                     ~7-9ms
+    observed fast mode            7.3ms, 8.6ms
+
+So the fast pair is the correct cost of an acknowledged durable write across this
+LAN, and the slow mode is the outlier — roughly 70ms of unexplained latency on a
+radio that has been idle for the 60 seconds between heartbeats. Wifi power-save
+wakeup fits the bimodality; fsync variance does not. A back-to-back run with no
+idle gap will settle it.
+
+### The per-event picture, combining both hosts' measurements
+
+    SHA-256 + canonical JSON       ~130µs      1.7%    inherent, negligible
+    log write + fsync              ~3.1ms              any durable logger pays this
+    state-file persist             ~3.5ms              this design's addition
+    synchronous acknowledged push   7-96ms   80-95%    this design's addition, dominant
+
+The README currently says "Hashing in the write path imposes overhead on the
+logging host. Not yet measured." The measurement says hashing is not the
+overhead. It is 1.7%. The synchronous acknowledged push is, by two orders of
+magnitude, and the state-file persist is second.
+
+That is a considerably more useful thing to tell a prospective adopter than a
+single aggregate number, and it is a better answer than the limitation implies:
+the expensive parts are engineering choices that can be revisited, while the part
+that is inherent to hash-at-write is negligible.
+
+### The architectural consequence, which matters more than the number
+
+`handle_event` holds `self.lock` across `_push_with_retry`. For seq 24 the
+application was blocked 112.6ms on one log write, 76ms of it waiting on the
+ledger, and every other event queues behind it. That is a throughput ceiling
+around 9-12 events/sec on this hardware, set by network latency rather than by
+anything cryptographic.
+
+The open design question, stated rather than quietly fixed mid-build: must the
+push happen inside the lock? The digest is already durable on disk before the
+push is attempted — that is what makes the spool safe. So the digest could be
+queued and pushed by the drainer, making the spool the normal path rather than
+the failure path, and taking the network out of the write path entirely.
+
+The cost of that change is a widened window between a record being written and
+its digest reaching the ledger, which is exactly the interval this project exists
+to shrink. It would need stating precisely rather than being treated as free.
+Not changing it now; recording it as the question T6's results will raise.
