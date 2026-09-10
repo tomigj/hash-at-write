@@ -906,3 +906,57 @@ run at the default threshold again. T4, the false-positive check, must therefore
 be run at --max-silence 0 to isolate what it is actually testing, with the
 historical gap reported separately and labelled as the known consequence of the
 deliberate stop.
+
+## T6: the single-run answer was wrong, and the noise control is why we know
+
+The first paired run, 200 events per arm, gave a clean-looking result:
+
+    hash    total_us med 6881   hash_us med 131   116.2 events/sec
+    nohash  total_us med 6589   hash_us med  54   126.9 events/sec
+    delta 292us, 4.42% of baseline
+
+That was nearly reported. What stopped it: `state_us` is **identical work in both
+arms** — the state file write does not care whether a digest exists — so its
+delta is a free estimate of run-to-run noise. It came in at +116µs, which is 40%
+of the 292µs effect about to be claimed.
+
+Three paired repetitions, 600 events per arm:
+
+    rep 1:  hash_us +70   write +266   state +290   total +576
+    rep 2:  hash_us +68   write  -95   state -129   total -107
+    rep 3:  hash_us +66   write -110   state  -22   total  -51
+
+    hash_us delta (pure hashing)       +66 .. +70    mean  +68us
+    state_us delta (NOISE CONTROL)    -129 .. +290   mean  +46us, spread ±147us
+    total_us delta                    -107 .. +576   mean +139us
+
+**The end-to-end delta (139µs) is smaller than the noise floor (±147µs), and in
+two of three repetitions the hashing arm was FASTER.** The 4.42% from the single
+run was fsync variance that happened to fall the same way twice.
+
+What is reproducible is `hash_us` itself: +66, +68, +70 — a 4µs spread across
+three runs. 68µs against an unprotected baseline of 6589µs is 1.03%.
+
+### Why the method matters more than the number
+
+"We measured it and it is 4%" invites argument about the 4%. "We measured it
+three times and could not detect it above fsync variance, and here is the control
+proving the instrument could have detected an effect that size" does not.
+
+The `state_us` control is what makes the claim credible. Without it there is no
+way to distinguish a small real effect from noise, and the honest conclusion —
+that the effect is below the measurement floor — is not available. Any write-up
+of T6 must state the control, not just the result.
+
+This is the fourth time in this build that a single observation supported a
+conclusion it could not carry. The others were `--max-silence 60`, `systemctl
+is-active`, and the overhead figures taken from six samples an idle radio apart.
+The pattern is consistent enough to state as a rule: a measurement without a
+control is an anecdote, and an absence without a positive control is not evidence.
+
+### Labelling the baseline arm
+
+The `--no-hash` arm produced 200 records with **0 carrying a digest**, verified
+rather than assumed. That log is unprotected, exists only as a measurement
+baseline, was never committed, and nothing from it may be presented as a
+demonstration of the system.

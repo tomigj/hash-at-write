@@ -204,7 +204,13 @@ Stated up front rather than discovered by whoever reads the code.
 
 - Development and testing on two hosts at laboratory volumes. Throughput, latency and storage
   behaviour at production log rates are not yet characterised.
-- Hashing in the write path imposes overhead on the logging host. Not yet measured.
+- Hashing in the write path costs about 68µs per event — roughly 1% of the per-event cost, and
+  below the run-to-run variance of the fsyncs that dominate the write path. Measured end to end
+  over three paired repetitions of 200 events per arm: the difference between hashing and not
+  hashing was not distinguishable from noise, and in two of the three repetitions the hashing arm
+  was faster. What the write path actually costs is durability and acknowledgement — a log write
+  and fsync, an atomic sequence persist, and a synchronous acknowledged push to the ledger — not
+  cryptography.
 - Segmentation is enforced by SSH configuration and firewall rules. Physical or hardware
   unidirectional separation is stronger and is not required for the property to hold, but the
   distinction should be understood.
