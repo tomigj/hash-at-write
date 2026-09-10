@@ -6,29 +6,39 @@ than the expected result, that is recorded rather than smoothed over.
 
 Times are UTC. Full captures are in `evidence/`.
 
-**All twelve scenarios complete.** Five of them were run more than once, or
-produced something other than the expected result the first time, and those are
-recorded as they happened rather than as they were eventually made to work.
+**Twelve of thirteen rows pass outright. T9 is marked as observed incidentally
+with its deliberate run outstanding** — the condition was demonstrated, but not as
+its own scenario against the systemd-managed service, which is where
+`Restart=always` is meant to make holding the agent down require an action that
+leaves a journal record.
+
+Several rows were run more than once, or produced something other than the
+expected result the first time. Those are recorded as they happened rather than
+as they were eventually made to work.
 
 ---
 
 ## Status
 
-| # | Scenario | Result | Evidence |
-|---|---|---|---|
-| T1 | Normal operation, volume | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
-| T2 | Modification | **PASS** | `step6-tamper-deletion.txt` |
-| T3 | Deletion, last record | **PASS** | `step6-tamper-deletion.txt` |
-| T3b | Deletion, middle record | **PASS** | `step6-tamper-deletion.txt` |
-| T4 | Legitimate activity, false-positive check | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
-| T5 | Write refusal | **PASS** | `step1-claim4-reverse-test.txt`, `step7-chain-integrity.txt` |
-| T6 | Overhead | **PASS** | `NOTES.md`, `step5-clean-run.txt` |
-| T7 | Unwitnessed insertion | **PASS** | `tests/run_attack_suite.py` |
-| T8 | Backdating | **PASS** | `tests/run_attack_suite.py` |
-| T9 | Stopped agent | **PASS** (incidental) | `step6-tamper-deletion.txt` |
-| T10 | Lost acknowledgement | **PASS** (unplanned) | `step3-push-path.txt` |
-| T11 | Implausible sequence | **PASS** | `step9-t11-sequence-bound.txt` |
-| T12 | Fabrication, expected to pass verification | **PASS** | `tests/run_attack_suite.py`, `NOTES.md` |
+All scenarios were run on **2026-09-10 UTC**. Times below are from the capture
+files and commit timestamps; where a row was run more than once the date of the
+capture cited is given.
+
+| # | Scenario | Run | Result | Evidence |
+|---|---|---|---|---|
+| T1 | Normal operation, volume | 05:52–05:55 | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
+| T2 | Modification | 05:13 | **PASS** | `step6-tamper-deletion.txt` |
+| T3 | Deletion, last record | 05:18 | **PASS** | `step6-tamper-deletion.txt` |
+| T3b | Deletion, middle record | 05:37 | **PASS** | `step6-tamper-deletion.txt` |
+| T4 | Legitimate activity, false-positive check | 05:55 | **PASS** | `step9-t1-t4-volume-and-real-activity.txt` |
+| T5 | Write refusal | 03:59, 05:20 | **PASS** | `step1-claim4-reverse-test.txt`, `step7-chain-integrity.txt` |
+| T6 | Overhead | 06:43 | **PASS** | `step9-t6-overhead.txt` |
+| T7 | Unwitnessed insertion | 06:42 | **PASS** | `step9-t7-t8-t12-attack-suite.txt` |
+| T8 | Backdating | 06:42 | **PASS** | `step9-t7-t8-t12-attack-suite.txt` |
+| T9 | Stopped agent | 05:13 | observed incidentally; deliberate run outstanding | `step6-tamper-deletion.txt` |
+| T10 | Lost acknowledgement | 04:25–04:37 | **PASS** | `step3-push-path.txt` |
+| T11 | Implausible sequence | 05:58 | **PASS** | `step9-t11-sequence-bound.txt` |
+| T12 | Fabrication, expected to pass verification | 06:42 | **PASS** | `step9-t7-t8-t12-attack-suite.txt` |
 
 ---
 
@@ -108,9 +118,13 @@ fact:
     at 150s elapsed:  TAMPER only, no SILENCE
     at 209s elapsed:  TAMPER + SILENCE seq=58->now, 3.5 minutes
 
-Still to run deliberately against the systemd-managed service, since
-`Restart=always` is specifically meant to make holding the agent down require an
-action that leaves a journal record.
+**Status: observed incidentally, deliberate run outstanding.** The condition was
+demonstrated and the threshold was seen being crossed, but not as its own scenario
+against the systemd-managed service. That is where `Restart=always` matters —
+under it, `kill` returns the agent within RestartSec, so holding it down requires
+`systemctl stop` or masking the unit, both of which leave a journal record. That
+specific property has not been tested and this row should not be read as though
+it had.
 
 ---
 

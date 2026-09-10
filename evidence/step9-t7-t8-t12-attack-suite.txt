@@ -1,0 +1,75 @@
+T7, T8 and T12 — captured output
+
+CAPTURED 2026-09-10 06:42:47 UTC on the ledger host `daddy`
+HARNESS  tests/run_attack_suite.py, at commit 2837056
+
+The test protocol previously cited the harness rather than its output for
+these three rows. This is the captured run.
+
+INSTANCE: each scenario stands up its OWN agent and ledgerd on loopback with
+its own socket, log, chain and audit file, in a temporary directory that is
+removed afterwards. Nothing here touches the production chain, which is
+frozen at 202 entries on this host and was not running during this capture.
+
+SCOPE: both processes run on one host over loopback. That is adequate for
+detection logic, which is what these three scenarios test. It is NOT a
+demonstration of split custody and must not be presented as one — the
+two-host deployment evidences that, in step1-claim4-reverse-test.txt and
+step4-pull-path.txt.
+
+================================================================================
+RUN
+================================================================================
+
+heartbeat 5s, silence threshold 15s
+each scenario runs on its own agent, ledgerd, log and chain
+
+==============================================================================
+T7 — unwitnessed insertion: agent stopped, record appended, restarted
+==============================================================================
+    [2026-09-10T06:42:54.717Z] chain=6 log=7 heartbeats=1 -> ALERTS
+      UNWITNESSED  seq=7        record is present in the log but no digest for it ever reached the ledger
+    exit 1
+    -> OK
+
+==============================================================================
+T8 — backdating: a witnessed record claiming to be 400 days old
+==============================================================================
+    [2026-09-10T06:43:01.686Z] chain=7 log=7 heartbeats=1 -> ALERTS
+      BACKDATED    seq=7        record claims 2025-08-06T06:43:01.246Z but its digest reached the ledger at 2026-09-10T06:43:01.247Z -- 400.0 days later, and the ledger was receiving normally at the claimed time (threshold 300s)
+    exit 1
+    -> OK
+
+==============================================================================
+T12 — fabrication with an honest timestamp, EXPECTED TO VERIFY CLEAN
+==============================================================================
+    [2026-09-10T06:43:08.695Z] chain=7 log=7 heartbeats=1 -> CLEAN
+    exit 0
+    -> OK
+
+==============================================================================
+  T7: as expected
+  T8: as expected
+  T12: as expected
+
+T12 verifying CLEAN is the intended result, not a failure. A record fabricated on
+the primary and witnessed through the normal path is byte-identical, in every
+property this design checks, to a genuine one. The stop was shorter than the
+silence threshold, and both values are printed above because the result depends
+entirely on that relationship.
+
+  exit: 0
+
+================================================================================
+READING T12
+================================================================================
+
+T12 verifying CLEAN is the intended result. A record fabricated on the primary
+with a truthful timestamp and witnessed through the normal path is
+byte-identical, in every property this design checks, to a genuine record.
+The agent stop was shorter than the silence threshold; both values are printed
+in the run above because the result depends entirely on that relationship. A
+stop LONGER than the threshold is detected — see step6-tamper-deletion.txt,
+where a 150s elapsed run was silent and a 209s run raised SILENCE.
+
+Thu Sep 10 06:43:08 AM UTC 2026

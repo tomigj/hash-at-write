@@ -1,0 +1,101 @@
+T6 — overhead, matched hash-on / hash-off arms
+
+CAPTURED 2026-09-10 06:43:52 to 06:44:05 UTC on the primary host `tg`
+         (10.0.0.173, Ubuntu 24.04.4, Python 3.12.3)
+
+INSTANCE: throwaway agent instances under /tmp with their own socket, log, state
+and timing files. --no-push, so nothing left the machine and no ledger was
+involved. The production chain was not running during this capture and was not
+touched.
+
+METHOD: --no-push removes the network from both arms, so the only variable is
+whether a digest is computed. --heartbeat-interval 0. 200 events per run, three
+repetitions per arm. All figures are MEDIANS in microseconds.
+
+================================================================================
+RUNS
+================================================================================
+
+  hash   rep1  n=200  hash=123 write=3066 state=3601 total=6918   118.5 events/sec
+  hash   rep2  n=200  hash=126 write=2996 state=3526 total=6725   123.0 events/sec
+  hash   rep3  n=200  hash=120 write=3093 state=3573 total=6915   120.0 events/sec
+  nohash rep1  n=200  hash=54  write=3183 state=3692 total=6982   117.2 events/sec
+  nohash rep2  n=200  hash=54  write=3019 state=3490 total=6606   124.5 events/sec
+  nohash rep3  n=200  hash=52  write=3105 state=3518 total=6725   122.0 events/sec
+
+  digests present, arm 1 of each:
+    hash:   200 records, 200 carrying a digest
+    nohash: 200 records,   0 carrying a digest
+
+================================================================================
+PAIRED DELTAS — hash arm minus nohash arm, by repetition
+================================================================================
+
+  state_us is IDENTICAL WORK in both arms. The state file write does not care
+  whether a digest exists, so its delta is a free estimate of run-to-run noise.
+
+  rep1  hash=+68  write=-116  state=-91  total=-64
+  rep2  hash=+71  write= -22  state=+36  total=+119
+  rep3  hash=+68  write= -12  state=+55  total=+189
+
+  pure hashing (hash_us delta)  +68 .. +71    mean +69us
+  end-to-end (total_us delta)   -64 .. +189   mean +82us
+  noise floor (state control)   +/-61us
+  unprotected baseline          6771us/event
+  pure hashing as share         1.02%
+
+================================================================================
+FINDINGS — computed from the runs above, not carried in from a previous session
+================================================================================
+
+  Pure hashing is +69us/event, range +68..+71 across three repetitions, a spread
+  of 3us. This is the reliable figure.
+
+  The end-to-end delta is +82us/event with a range of -64..+189. That range SPANS
+  ZERO: in at least one repetition the hashing arm was FASTER than the
+  unprotected arm. The end-to-end effect is therefore NOT RESOLVED at n=3,
+  whether or not its mean exceeds the noise control.
+
+  The write path is dominated by two fsyncs. Hashing is ~1% of it and is not
+  separable from fsync variance end to end at this sample size.
+
+================================================================================
+STABILITY ACROSS THREE INDEPENDENT SESSIONS
+================================================================================
+
+  session 1, 05:59 UTC   pure hashing +68us  (range 66..70)
+  session 2, 06:00 UTC   pure hashing +71us  (range 68..74)
+  session 3, 06:43 UTC   pure hashing +69us  (range 68..71)
+
+  Nine repetitions, 1800 events per arm in total, three separate invocations.
+
+================================================================================
+THE UNPROTECTED ARM
+================================================================================
+
+The `nohash` arm produced 200 records with ZERO carrying a digest — verified by
+inspection, not assumed. That log is a MEASUREMENT BASELINE ONLY. It is not a
+demonstration of the system and nothing from it may be presented as one. It
+existed under /tmp, was deleted after measurement, and never entered the
+repository.
+
+================================================================================
+AN ERROR IN THE FIRST CAPTURE ATTEMPT, RECORDED
+================================================================================
+
+The first version of this capture ended with a hardcoded line reading "The
+end-to-end delta is SMALLER than the noise floor." That was true of an earlier
+session. In this capture the end-to-end delta was larger, not smaller — the
+conclusion had been written from the previous run's numbers and printed
+regardless of what was measured.
+
+It would have appeared in this file as a statement contradicted by the table
+directly above it.
+
+The capture was regenerated with its findings computed from the runs rather than
+asserted, including the branch for whether the delta range spans zero. If a
+future run produces a different shape, the text changes with it.
+
+This is the same failure as recording "no alert of any kind" from a run whose
+threshold was set above the condition being tested: a conclusion carried forward
+past the data that supported it.

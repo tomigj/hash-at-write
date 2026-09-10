@@ -10,13 +10,24 @@ write to, and continuously verifies that the record has not been altered or remo
 
 ## Status
 
-**Design and specification published. Reference implementation in progress.**
+**Implementation complete and tested. Results published.**
 
-This repository currently contains the architecture, threat model, verification method and test
-protocol. Working code and test results will follow. The roadmap below tracks what exists.
+The agent, ledger node and verifier are written and running. Twelve scenarios across thirteen test
+rows have been executed against two hosts. Twelve rows pass outright — including one that is
+expected to pass verification and does, because it marks the boundary of what the design can do.
+The thirteenth, the stopped-agent case, was demonstrated but not as its own scenario against the
+systemd-managed service, and is recorded that way rather than counted as complete.
 
-I would rather publish a design that can be reviewed than wait until everything is finished.
-If the approach is wrong, I would like to know before I build more of it.
+At the time of writing the deployment had produced a chain of 202 entries with verification
+reporting `chain=n log=n → CLEAN` through the production pull path, running unattended under
+systemd with the agent restarting on failure and verification on a five-minute timer.
+
+Full results are in [`tests/test_protocol.md`](tests/test_protocol.md), captured output in
+[`evidence/`](evidence/), and the working notes — including every defect found and corrected during
+the build — in [`NOTES.md`](NOTES.md).
+
+I would rather publish something that can be reviewed than wait until it is polished. If the
+approach is wrong, I would like to know.
 
 ---
 
@@ -141,6 +152,55 @@ on the ledger node accepting connections from the log host only.
 
 ---
 
+## Results
+
+Thirteen test rows: twelve pass outright, and the stopped-agent row is recorded as observed
+incidentally with its deliberate run outstanding. Full detail in
+[`tests/test_protocol.md`](tests/test_protocol.md), captured output in [`evidence/`](evidence/).
+
+| | Demonstrated |
+|---|---|
+| Modification | Altering one field of one record is detected, with the recomputed digest predicted independently on both hosts and agreeing exactly |
+| Deletion | Detected both as a truncated tail and as a mid-log excision. The two alerts read differently and both are included — see below |
+| Insertion | A record written to the log with no digest reaching the ledger is detected |
+| Backdating | A record claiming a date its digest contradicts is detected |
+| Stopped agent | Detected as a gap in the ledger's receipt timeline, with the threshold observed being crossed rather than asserted. Not yet run deliberately against the systemd-managed service |
+| Write refusal | The primary cannot reach the ledger except on the digest port, and the chain resists modification, deletion and renaming |
+| Lost acknowledgement | An ordinary dropped packet is not reported as an attack |
+| Fabrication | **Verifies clean, by design.** See the threat model |
+
+The two deletion alerts differ because the ledger declines to assert more than it knows. Removing
+the final record leaves the log contiguous with no gap, so truncation cannot be distinguished from a
+digest submitted for a record that never existed, and the alert says so. Removing a middle record
+leaves a real hole and the alert states deletion plainly. The first is the harder case and the
+stronger demonstration — nothing on the primary indicates loss at all.
+
+### Overhead
+
+Hashing in the write path costs about **69µs per event**, roughly **1%** of the per-event cost.
+
+That figure is stable: nine paired repetitions across three independent sessions, 200 events per
+arm, hashing on against hashing off with the network removed from both arms so the only variable is
+the hash. Pure hashing came in at +68, +69 and +71µs per session, a spread of 3µs.
+
+The end-to-end effect is a different matter and the honest answer is that it is **not resolved**.
+Across repetitions the total per-event delta ranged from −64µs to +189µs — a range that spans zero,
+meaning that in some repetitions the hashing arm was *faster* than the unprotected one. The write
+path is dominated by two fsyncs whose run-to-run variance is comparable to the effect being
+measured.
+
+The method matters more than the figure. `state_us` measures work that is identical in both arms —
+the state file write does not care whether a digest exists — so its delta is a free estimate of
+run-to-run noise, and it is reported alongside the result. A single early run suggested 4.42%; the
+noise control showed 40% of that was variance, and it was discarded. Without the control there is no
+way to distinguish a small real effect from noise, and the honest conclusion would not have been
+available.
+
+What the write path actually costs is durability and acknowledgement — a log write and fsync, an
+atomic sequence persist, and a synchronous acknowledged push to the ledger. Not cryptography.
+
+---
+
 ## What this is not
 
 Cryptographic protection of audit records is not a new idea, and this project claims no new
@@ -163,6 +223,17 @@ integrity modules all exist and work.
   teams.
 
 SHA-256 is used precisely because it is a published standard that needs no defending.
+
+**Adjacent work, and where the line falls.** The IETF's RATS working group is active and
+standardising formats for conveying attestation evidence to a verifier — the same shape of problem
+one layer down, concerned with attesting to a system's state rather than to the records it produces.
+Separately, [witnessd](https://github.com/writerslogic/witnessd) (Condrey,
+[arXiv:2602.01663](https://arxiv.org/abs/2602.01663)) addresses cryptographic authorship witnessing:
+its jitter seal injects HMAC-derived microsecond delays into keystrokes so that valid evidence can
+only exist if real typing produced the document's intermediate states. That constrains *when and how
+a document was created*; this project establishes that *a record has not changed since it was
+witnessed*. Overlapping machinery — hash chains, external anchors — applied to opposite ends of a
+document's life, and neither substitutes for the other.
 
 ---
 
@@ -187,13 +258,16 @@ same problem.
 
 - [x] Architecture, threat model, verification method
 - [x] Test protocol
-- [ ] Hashing agent
-- [ ] Ledger node and chain construction
-- [ ] Verifier with tamper, deletion and chain-break detection
-- [ ] Test results published
-- [ ] Overhead measurement at volume
+- [x] Hashing agent
+- [x] Ledger node and chain construction
+- [x] Verifier with tamper, deletion and chain-break detection
+- [x] Test results published
+- [x] Overhead measurement
+- [ ] Deliberate stopped-agent test against the systemd-managed service — observed incidentally
+      during other tests, not yet run as its own scenario
 - [ ] External anchoring of the chain head
-- [ ] Failure-mode handling: channel interruption, ledger unavailability, clock skew, rotation
+- [ ] Failure-mode handling: clock skew and log rotation. Channel interruption and ledger
+      unavailability are covered — see the spool and recovery evidence
 - [ ] Integration notes for Splunk, QRadar, Sentinel, ArcSight
 
 ---
@@ -204,13 +278,6 @@ Stated up front rather than discovered by whoever reads the code.
 
 - Development and testing on two hosts at laboratory volumes. Throughput, latency and storage
   behaviour at production log rates are not yet characterised.
-- Hashing in the write path costs about 68µs per event — roughly 1% of the per-event cost, and
-  below the run-to-run variance of the fsyncs that dominate the write path. Measured end to end
-  over three paired repetitions of 200 events per arm: the difference between hashing and not
-  hashing was not distinguishable from noise, and in two of the three repetitions the hashing arm
-  was faster. What the write path actually costs is durability and acknowledgement — a log write
-  and fsync, an atomic sequence persist, and a synchronous acknowledged push to the ledger — not
-  cryptography.
 - Segmentation is enforced by SSH configuration and firewall rules. Physical or hardware
   unidirectional separation is stronger and is not required for the property to hold, but the
   distinction should be understood.
